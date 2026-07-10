@@ -12,7 +12,7 @@ assert(m, "peliskripti löytyy HTML:stä");
 globalThis.assert = assert;
 (0, eval)(worldData + m[1] + `
 // --- testit samassa scopessa ---
-const KEYS = ["suomi","eurooppa","aasia","afrikka","pohjois_amerikka","etela_amerikka","oseania"];
+const KEYS = ["suomi","eurooppa","aasia","afrikka","pohjois_amerikka","usa","etela_amerikka","oseania"];
 let seed = 42;
 const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
 
@@ -76,6 +76,17 @@ assert(inFeature(FI, "Saimaa", 28.88, 61.87), "Savonlinna on Saimaalla");
 assert(inFeature(FI, "Lappi", 25.73, 66.50), "Rovaniemi on Lapissa");
 assert(inFeature(FI, "Kemijoki", 25.73, 66.50), "Rovaniemi on Kemijoen varrella");
 assert(inFeature(FI, "Pohjanlahti", 20.0, 62.5), "Pohjanlahti osuu");
+
+// Yhdysvaltain osavaltiot
+const US = CONTINENTS.usa;
+assert.strictEqual(US.countries.length, 48, "48 osavaltiota");
+assert(inCountry(US, "Kalifornia", -118.24, 34.05), "Los Angeles on Kaliforniassa");
+assert(inCountry(US, "Texas", -95.37, 29.76), "Houston on Texasissa");
+assert(inCountry(US, "New York", -78.88, 42.89), "Buffalo on New Yorkin osavaltiossa");
+assert(!inCountry(US, "Nevada", -118.24, 34.05), "Los Angeles ei ole Nevadassa");
+assert(inFeature(US, "Yläjärvi", -87.5, 47.6), "Yläjärvi osuu");
+assert(inFeature(US, "Mississippi", -90.05, 35.15), "Memphis on Mississippin varrella");
+assert(inFeature(US, "Grand Canyon", -112.1, 36.1), "Grand Canyon osuu");
 
 // Tunnetut sijainnit: kaupunki maansa sisällä
 const EU = CONTINENTS.eurooppa;

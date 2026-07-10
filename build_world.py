@@ -10,6 +10,7 @@ Käyttö: python3 build_world.py <aineistohakemisto> [ulostulo.js]
 Hakemistossa on oltava:
   ne50.geojson                              (ne_50m_admin_0_countries)
   ne10_ukr.geojson                          (Krim Ukrainalle -korvaukset)
+  ne_50m_admin_1.geojson                    (ne_50m_admin_1_states_provinces)
   ne_50m_lakes.geojson
   ne_50m_rivers_lake_centerlines.geojson
   ne_50m_geography_marine_polys.geojson
@@ -109,6 +110,31 @@ OC_COUNTRIES = {
     "Papua New Guinea": "Papua-Uusi-Guinea", "Fiji": "Fidži",
     "Solomon Islands": "Salomonsaaret", "Vanuatu": "Vanuatu",
     "East Timor": "Itä-Timor", "Timor-Leste": "Itä-Timor",
+}
+
+# Manner-USA:n 48 osavaltiota (Alaska, Havaiji ja DC eivät mahdu karttaan)
+US_STATES = {
+    "Alabama": "Alabama", "Arizona": "Arizona", "Arkansas": "Arkansas",
+    "California": "Kalifornia", "Colorado": "Colorado",
+    "Connecticut": "Connecticut", "Delaware": "Delaware",
+    "Florida": "Florida", "Georgia": "Georgia", "Idaho": "Idaho",
+    "Illinois": "Illinois", "Indiana": "Indiana", "Iowa": "Iowa",
+    "Kansas": "Kansas", "Kentucky": "Kentucky", "Louisiana": "Louisiana",
+    "Maine": "Maine", "Maryland": "Maryland",
+    "Massachusetts": "Massachusetts", "Michigan": "Michigan",
+    "Minnesota": "Minnesota", "Mississippi": "Mississippi",
+    "Missouri": "Missouri", "Montana": "Montana", "Nebraska": "Nebraska",
+    "Nevada": "Nevada", "New Hampshire": "New Hampshire",
+    "New Jersey": "New Jersey", "New Mexico": "New Mexico",
+    "New York": "New York", "North Carolina": "Pohjois-Carolina",
+    "North Dakota": "Pohjois-Dakota", "Ohio": "Ohio",
+    "Oklahoma": "Oklahoma", "Oregon": "Oregon",
+    "Pennsylvania": "Pennsylvania", "Rhode Island": "Rhode Island",
+    "South Carolina": "Etelä-Carolina", "South Dakota": "Etelä-Dakota",
+    "Tennessee": "Tennessee", "Texas": "Texas", "Utah": "Utah",
+    "Vermont": "Vermont", "Virginia": "Virginia",
+    "Washington": "Washington", "West Virginia": "Länsi-Virginia",
+    "Wisconsin": "Wisconsin", "Wyoming": "Wyoming",
 }
 
 # Luonnonkohteet: (fi-nimi, aineisto, NE-nimet)
@@ -219,6 +245,34 @@ CONTINENTS = {
             ("Sambesi", "river", ["Zambezi"]),
         ],
     },
+    "usa": {
+        "name": "Yhdysvallat", "bbox": (-125.5, -66, 24, 49.8), "reflat": 38,
+        # kohteet ovat osavaltioita (admin-1); admin-0-maat jäävät taustaksi
+        "countries": {}, "exclude": set(),
+        "states": US_STATES, "states_admin": "United States of America",
+        "features": [
+            ("Meksikonlahti", "marine", ["Gulf of Mexico"]),
+            ("Chesapeakenlahti", "marine", ["Chesapeake Bay"]),
+            ("Yläjärvi", "lake", ["Lake Superior"]),
+            ("Michiganjärvi", "lake", ["Lake Michigan"]),
+            ("Huronjärvi", "lake", ["Lake Huron"]),
+            ("Eriejärvi", "lake", ["Lake Erie"]),
+            ("Ontariojärvi", "lake", ["Lake Ontario"]),
+            ("Iso Suolajärvi", "lake", ["Great Salt Lake"]),
+            ("Kalliovuoret", "region", ["ROCKY MOUNTAINS"]),
+            ("Appalakit", "region", ["APPALACHIAN MTS."]),
+            ("Suuret tasangot", "region", ["GREAT PLAINS"]),
+            ("Sierra Nevada", "region", ["SIERRA NEVADA"]),
+            ("Kaskadit", "region", ["CASCADE RANGE"]),
+            ("Grand Canyon", "region", ["Grand Canyon"]),
+            ("Mississippi", "river", ["Mississippi"]),
+            ("Missourijoki", "river", ["Missouri"]),
+            ("Coloradojoki", "river", ["Colorado"]),
+            ("Rio Grande", "river", ["Rio Grande"]),
+            ("Ohiojoki", "river", ["Ohio"]),
+            ("Columbiajoki", "river", ["Columbia"]),
+        ],
+    },
     "pohjois_amerikka": {
         "name": "Pohjois-Amerikka", "bbox": (-170, -50, 5, 72), "reflat": 45,
         "countries": NA_COUNTRIES, "exclude": set(),
@@ -285,7 +339,7 @@ ALWAYS_EXCLUDE = {"Antarctica"}
 MOUNTAIN_FI = {
     "Alpit", "Pyreneet", "Karpaatit", "Himalaja", "Atlasvuoret",
     "Etiopian ylänkö", "Kalliovuoret", "Appalakit", "Andit",
-    "Eteläalpit", "Iso Vedenjakajavuoristo",
+    "Eteläalpit", "Iso Vedenjakajavuoristo", "Sierra Nevada", "Kaskadit",
 }
 
 
@@ -571,6 +625,8 @@ def main():
             return json.load(f)
 
     countries_geo = load("ne50.geojson")
+    admin1_geo = (load("ne_50m_admin_1.geojson")
+                  if any(c.get("states") for c in CONTINENTS.values()) else None)
     lakes_geo = load("ne_50m_lakes.geojson")
     rivers_geo = load("ne_50m_rivers_lake_centerlines.geojson")
     marine_geo = load("ne_50m_geography_marine_polys.geojson")
@@ -622,10 +678,23 @@ def main():
                 target_rings.setdefault(fi, []).extend(rings)
             else:
                 bg.append(path_d(rings))
+        # osavaltiokohteet (admin-1); maat jäävät edellä taustaksi
+        if cfg.get("states"):
+            for feat in admin1_geo["features"]:
+                props = feat["properties"]
+                if props.get("admin") != cfg["states_admin"]:
+                    continue
+                fi = cfg["states"].get(props.get("name"))
+                if not fi:
+                    continue
+                rings = geom_rings(feat["geometry"], project, W, H)
+                if rings:
+                    target_rings.setdefault(fi, []).extend(rings)
         targets = [{"n": fi, "c": rings_centroid(rings),
                     "d": path_d(rings), "p": flat(rings)}
                    for fi, rings in target_rings.items()]
-        missing = set(cfg["countries"].values()) - set(target_rings)
+        wanted_fi = set(cfg["countries"].values()) | set(cfg.get("states", {}).values())
+        missing = wanted_fi - set(target_rings)
         if missing:
             print(f"!! {cfg['name']}: maita ei löytynyt: {sorted(missing)}")
         targets.sort(key=lambda t: t["n"])

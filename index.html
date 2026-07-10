@@ -246,6 +246,30 @@ const CITY_DATA = {
       ["Utsjoki",69.91,27.03]
     ]
   },
+  usa: {
+    pk: [
+      ["New York",40.71,-74.01],["Los Angeles",34.05,-118.24],["Chicago",41.88,-87.63],
+      ["Houston",29.76,-95.37],["Phoenix",33.45,-112.07],["Philadelphia",39.95,-75.17],
+      ["San Antonio",29.42,-98.49],["San Diego",32.72,-117.16],["Dallas",32.78,-96.80],
+      ["Austin",30.27,-97.74],["San Francisco",37.77,-122.42],["Seattle",47.61,-122.33],
+      ["Denver",39.74,-104.99],["Boston",42.36,-71.06],["Miami",25.76,-80.19],
+      ["Atlanta",33.75,-84.39],["Washington",38.91,-77.04],["Las Vegas",36.17,-115.14],
+      ["Detroit",42.33,-83.05],["Minneapolis",44.98,-93.27],["New Orleans",29.95,-90.07],
+      ["Portland",45.52,-122.68],["St. Louis",38.63,-90.20],["Salt Lake City",40.76,-111.89],
+      ["Kansas City",39.10,-94.58]
+    ],
+    kau: [
+      ["Nashville",36.16,-86.78],["Memphis",35.15,-90.05],["Charlotte",35.23,-80.84],
+      ["Orlando",28.54,-81.38],["Tampa",27.95,-82.46],["Jacksonville",30.33,-81.66],
+      ["Cleveland",41.50,-81.69],["Pittsburgh",40.44,-80.00],["Cincinnati",39.10,-84.51],
+      ["Milwaukee",43.04,-87.91],["Indianapolis",39.77,-86.16],["Columbus",39.96,-83.00],
+      ["Richmond",37.54,-77.44],["Buffalo",42.89,-78.88],["Oklahoma City",35.47,-97.52],
+      ["Albuquerque",35.08,-106.65],["El Paso",31.76,-106.49],["Tucson",32.22,-110.97],
+      ["Sacramento",38.58,-121.49],["Fresno",36.75,-119.77],["Omaha",41.26,-95.93],
+      ["Louisville",38.25,-85.76],["Des Moines",41.59,-93.62],["Boise",43.62,-116.20],
+      ["Billings",45.78,-108.50]
+    ]
+  },
   eurooppa: {
     pk: [
       ["Helsinki",60.17,24.94],["Tukholma",59.33,18.06],["Oslo",59.91,10.75],
@@ -465,13 +489,16 @@ if (typeof document !== "undefined") {
   const svg = $("map"), heliEl = $("heli"), bodyEl = $("hbody"), rotorEl = $("rotor");
   const MODE_NAMES = { pk: "Pääkaupungit", kau: "Suurkaupungit", maa: "Maat",
                        luonto: "Luonnonkohteet", seka: "Sekoitus" };
-  // Suomen kartalla kaupunkimuodoilla on omat nimet
-  const MODE_NAMES_SUOMI = { pk: "Isot kaupungit", kau: "Pienet kaupungit" };
+  // aluekohtaiset pelimuotojen nimet (Suomi: kaupungit; USA: osavaltiot)
+  const MODE_OVERRIDES = {
+    suomi: { pk: "Isot kaupungit", kau: "Pienet kaupungit" },
+    usa: { pk: "Suurkaupungit", kau: "Muut kaupungit", maa: "Osavaltiot" }
+  };
   function modeName(m) {
-    return (contKey === "suomi" && MODE_NAMES_SUOMI[m]) || MODE_NAMES[m];
+    return (MODE_OVERRIDES[contKey] || {})[m] || MODE_NAMES[m];
   }
   const CONT_ORDER = ["suomi", "eurooppa", "aasia", "afrikka",
-                      "pohjois_amerikka", "etela_amerikka", "oseania"];
+                      "pohjois_amerikka", "usa", "etela_amerikka", "oseania"];
 
   // Tallennus
   const STORE = "euroopankartta";
@@ -589,6 +616,7 @@ if (typeof document !== "undefined") {
   function hud() {
     const t = tasks[taskIx];
     const pre = { city: "Etsi kaupunki: ", country: "Etsi maa: ", feature: "Etsi: " };
+    if (contKey === "usa") pre.country = "Etsi osavaltio: ";
     $("task").innerHTML = t ? pre[t.kind] + "<b>" + t.name + "</b>" : "Maailman kartta";
     updateClock(true);
   }
