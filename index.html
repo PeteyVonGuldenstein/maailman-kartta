@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Maailman kartta">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#40318d">
+<title>Maailman kartta</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚁</text></svg>">
+<script>
+// Virheenkerääjä heti alkuun: jos mikä tahansa myöhempi skripti kaatuu,
+// virhe tulee näkyviin aloitusruudun varoitukseen vianetsintää varten.
+window.addEventListener("error", function (e) {
+  var w = document.getElementById("jswarn");
+  if (w) {
+    w.style.display = "block";
+    w.textContent = "⚠️ Virhe pelin koodissa: " + (e.message || e.type) +
+      (e.lineno ? " (rivi " + e.lineno + ")" : "");
+  }
+});
+</script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #40318d;
+    display: flex; flex-direction: column;
+    -webkit-user-select: none; user-select: none;
+  }
+  #hud {
+    color: #fff; background: #40318d;
+    padding: max(8px, env(safe-area-inset-top)) 12px 8px;
+    display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+    font-size: clamp(15px, 4vw, 20px);
+  }
+  #task b { color: #ffd94a; }
+  #stats { color: #b9aefc; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  #mapwrap { flex: 1; position: relative; background: #79b7d8; min-height: 0; }
+  svg#map { width: 100%; height: 100%; display: block; touch-action: none; }
+  svg#mini {
+    position: absolute; right: 8px; bottom: 8px;
+    width: clamp(100px, 24vw, 170px);
+    border: 2px solid #40318d; border-radius: 8px;
+    background: #79b7d8; opacity: .92; pointer-events: none;
+  }
+  #stick {
+    position: absolute; left: 14px; bottom: 14px; z-index: 2;
+    width: 128px; height: 128px; border-radius: 50%;
+    background: rgba(64, 49, 141, .35);
+    border: 2px solid rgba(120, 105, 196, .7);
+    touch-action: none; -webkit-user-select: none; user-select: none;
+  }
+  #knob {
+    position: absolute; left: 50%; top: 50%;
+    width: 58px; height: 58px; border-radius: 50%;
+    background: rgba(106, 85, 214, .9); border: 2px solid #b9aefc;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .35);
+  }
+  .bgland { fill: #d8d2c0; stroke: #bdb49e; stroke-width: 1; }
+  .country { fill: #f2ecd8; stroke: #a19678; stroke-width: 1; transition: fill .4s; }
+  .country.found { fill: #b9dfa5; }
+  .lake { fill: #79b7d8; stroke: #5a9cc0; stroke-width: .6; }
+  .river { fill: none; stroke: #5a9cc0; stroke-width: 1.3; stroke-linecap: round; }
+  .mount { fill: none; stroke: #9c7f5a; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
+  .dot { fill: #fff; stroke: #444; stroke-width: 1.6; }
+  .dot.found { fill: #58b24c; stroke: #2c6e26; }
+  .label {
+    font-size: 15px; font-weight: 600; fill: #2c3e50;
+    stroke: #fff; stroke-width: 3px; paint-order: stroke;
+    text-anchor: middle; pointer-events: none;
+    transition: opacity .5s;
+  }
+  #hint { transition: opacity .3s; pointer-events: none; }
+  #hint polygon { fill: #e74c3c; stroke: #fff; stroke-width: 2; }
+  #toast {
+    position: absolute; left: 50%; top: 16%; transform: translate(-50%, -50%);
+    background: rgba(64, 49, 141, .92); color: #fff;
+    padding: 10px 22px; border-radius: 12px; border: 2px solid #7869c4;
+    font-size: clamp(16px, 4.5vw, 24px); text-align: center;
+    opacity: 0; transition: opacity .3s; pointer-events: none; max-width: 90%;
+  }
+  #toast.show { opacity: 1; }
+  #toast b { color: #ffd94a; }
+  .overlay {
+    position: absolute; inset: 0; z-index: 5;
+    background: #40318d; color: #b9aefc;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; padding: 24px; text-align: center; overflow-y: auto;
+  }
+  .overlay.hidden { display: none; }
+  .frame { border: 10px solid #7869c4; padding: 20px 24px; border-radius: 4px; max-width: 480px; width: 100%; }
+  .overlay h1 { font-family: ui-monospace, "Courier New", monospace; color: #fff; font-size: clamp(22px, 6.5vw, 34px); letter-spacing: 1px; }
+  .overlay h2 { color: #fff; font-size: clamp(20px, 6vw, 30px); }
+  .overlay p { font-size: 14.5px; line-height: 1.45; margin: 6px 0; }
+  .overlay .copter { font-size: 40px; }
+  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; margin-top: 4px; }
+  .conts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; width: 100%; margin-top: 4px; }
+  button {
+    font: inherit; cursor: pointer; border: 2px solid #7869c4; border-radius: 10px;
+    background: #5442b0; color: #fff; padding: 10px 6px; font-size: 15px;
+  }
+  button:active { background: #6a55d6; }
+  .conts button { font-size: 13.5px; padding: 9px 4px; }
+  .conts button.sel { background: #2e9e44; border-color: #7fd992; }
+  #learnbtn { width: 100%; margin-top: 4px; }
+  #learnbtn.sel { background: #2e9e44; border-color: #7fd992; }
+  button .best { display: block; font-size: 12px; color: #cfc6ff; margin-top: 2px; }
+  button.big { grid-column: 1 / -1; background: #2e9e44; border-color: #7fd992; font-size: 18px; padding: 14px; }
+  .record { color: #ffd94a; font-weight: 700; font-size: 18px; }
+</style>
+</head>
+<body>
+<div id="hud">
+  <div id="task">Maailman kartta</div>
+  <div id="stats"></div>
+</div>
+<div id="mapwrap">
+  <svg id="map" viewBox="0 0 1000 845" preserveAspectRatio="xMidYMid meet">
+    <rect x="-500" y="-500" width="2000" height="2500" fill="#79b7d8"/>
+    <g id="world">
+      <path id="bg" class="bgland"/>
+      <g id="countries"></g>
+      <path id="lakes" class="lake"/>
+      <path id="rivers" class="river"/>
+      <path id="mounts" class="mount"/>
+      <g id="dots"></g>
+      <g id="labels"></g>
+    </g>
+    <g id="fx">
+      <circle id="pulse" r="0" fill="none" stroke="#2e9e44" stroke-width="4" opacity="0"/>
+      <g id="hint" opacity="0"><polygon points="0,-10 24,0 0,10"/></g>
+    </g>
+    <g id="heli">
+      <ellipse cx="5" cy="11" rx="16" ry="6" fill="rgba(0,0,0,.22)"/>
+      <g id="hbody">
+        <line x1="-23" y1="0" x2="-8" y2="0" stroke="#a03325" stroke-width="3.5"/>
+        <circle cx="-23" cy="0" r="4" fill="none" stroke="#7c2417" stroke-width="2"/>
+        <line x1="-8" y1="-8.5" x2="10" y2="-8.5" stroke="#555" stroke-width="2.2"/>
+        <line x1="-8" y1="8.5" x2="10" y2="8.5" stroke="#555" stroke-width="2.2"/>
+        <ellipse cx="0" cy="0" rx="12" ry="7" fill="#d94f3d" stroke="#a03325" stroke-width="1.5"/>
+        <circle cx="6" cy="0" r="3.6" fill="#bfe3f0"/>
+        <circle r="17.5" fill="rgba(255,255,255,.14)"/>
+        <g id="rotor" stroke="#333" stroke-width="2.4" stroke-linecap="round">
+          <line x1="-18" y1="0" x2="18" y2="0"/>
+          <line x1="0" y1="-18" x2="0" y2="18"/>
+        </g>
+      </g>
+    </g>
+  </svg>
+  <svg id="mini" viewBox="0 0 1000 845">
+    <rect id="minisea" x="0" y="0" width="1000" height="845" fill="#79b7d8"/>
+    <use href="#world"/>
+    <rect id="miniview" fill="none" stroke="#e74c3c" stroke-width="14" rx="10"/>
+    <circle id="miniheli" r="20" fill="#e74c3c" stroke="#fff" stroke-width="6"/>
+  </svg>
+  <div id="stick"><div id="knob"></div></div>
+  <div id="toast"></div>
+</div>
+
+<div id="start" class="overlay">
+  <div class="frame">
+    <div class="copter">🚁</div>
+    <h1>MAAILMAN KARTTA</h1>
+    <p>Lennä helikopterilla etsimääsi kohteeseen tatilla tai sormella karttaa koskettamalla. Kun olet kohteen päällä, <b>tuplanapauta tattia</b>, niin kopteri laskeutuu ja paikka tarkistetaan. Tietokoneella ohjaat nuolinäppäimillä ja laskeudut välilyönnillä.</p>
+    <p>Kello käy: aikaa on aluksi 2 min 30 s, oikea löytö antaa <b>+10 s</b> ja väärä paikka vie <b>−10 s</b>. Joka kymmenes löytö antaa <b>+20 s</b> ekstraa. Peli päättyy, kun kaikki kohteet on löydetty tai aika loppuu.</p>
+    <p id="jswarn" style="color:#ffc4b8;font-weight:600">⚠️ Pelin koodi ei ole käynnistynyt, koska tämä katselin ei suorita JavaScriptiä. Avaa tiedosto Chromella: Chrome-valikko ⋮ → Lataukset. Sovellusten esikatselu ja HTML-katselin eivät kelpaa.</p>
+    <p>Valitse alue:</p>
+    <div class="conts" id="contbtns"></div>
+    <button id="learnbtn">🎓 Opettelu<span class="best">Ei aikarajaa, ennätyksiä ei tallenneta ja löydettyjen nimet jäävät kartalle</span></button>
+    <p>Valitse pelimuoto:</p>
+    <div class="modes">
+      <button data-mode="pk"><span id="lbl-pk">Pääkaupungit</span><span class="best" id="best-pk"></span></button>
+      <button data-mode="kau"><span id="lbl-kau">Suurkaupungit</span><span class="best" id="best-kau"></span></button>
+      <button data-mode="maa"><span id="lbl-maa">Maat</span><span class="best" id="best-maa"></span></button>
+      <button data-mode="luonto"><span id="lbl-luonto">Luonnonkohteet</span><span class="best" id="best-luonto"></span></button>
+      <button data-mode="seka" style="grid-column:1/-1"><span id="lbl-seka">Sekoitus</span><span class="best" id="best-seka"></span></button>
+    </div>
+  </div>
+</div>
+
+<div id="end" class="overlay hidden">
+  <div class="frame">
+    <div class="copter">🏆</div>
+    <h2>Kierros valmis!</h2>
+    <p id="endscore" style="font-size:21px;color:#fff"></p>
+    <p id="endbest"></p>
+    <div class="modes">
+      <button class="big" id="again">Pelaa uudestaan</button>
+      <button class="big" id="tomenu" style="background:#5442b0;border-color:#7869c4">Valikkoon</button>
+    </div>
+  </div>
+</div>
+
+<script src="world_data.js"></script>
+<script>
+"use strict";
+/* ==================== Pelilogiikka (puhtaat funktiot) ==================== */
+const KM_PER_DEG = 111.32;
+
+function project(lon, lat, C) {
+  const S = C.W / ((C.lon1 - C.lon0) * C.cos);
+  return [(lon - C.lon0) * C.cos * S, (C.lat1 - lat) * S];
+}
+
+function kmPerPx(C) {
+  return KM_PER_DEG * (C.lat1 - C.lat0) / C.H;
+}
+
+// Mantereen kokokerroin: kartan lävistäjä kilometreinä suhteessa verrokkiin
+// (Eurooppa = 1). Nopeus, näkymä ja toleranssit kerrotaan tällä, jolloin
+// jokainen manner pelaa samassa suhteessa kuin Eurooppa.
+function sizeScale(C, ref) {
+  return Math.hypot(C.W, C.H) * kmPerPx(C) /
+         (Math.hypot(ref.W, ref.H) * kmPerPx(ref));
+}
+
+// Kaupungit alueittain: pk = pääkaupungit, kau = suurkaupungit; [nimi, lat, lon]
+// (Suomessa pk = isot kaupungit ja kau = pienet kaupungit)
+const CITY_DATA = {
+  suomi: {
+    pk: [
+      ["Helsinki",60.17,24.94],["Turku",60.45,22.27],["Tampere",61.50,23.76],
+      ["Oulu",65.01,25.47],["Jyväskylä",62.24,25.75],["Kuopio",62.89,27.68],
+      ["Lahti",60.98,25.66],["Pori",61.49,21.80],["Joensuu",62.60,29.76],
+      ["Lappeenranta",61.06,28.19],["Hämeenlinna",61.00,24.46],["Vaasa",63.10,21.62],
+      ["Seinäjoki",62.79,22.84],["Rovaniemi",66.50,25.73],["Mikkeli",61.69,27.27],
+      ["Kotka",60.47,26.95],["Kokkola",63.84,23.13],["Kajaani",64.22,27.73],
+      ["Savonlinna",61.87,28.88],["Kemi",65.74,24.56],["Maarianhamina",60.10,19.94],
+      ["Porvoo",60.39,25.66],["Rauma",61.13,21.51],["Salo",60.39,23.13]
+    ],
+    kau: [
+      ["Hanko",59.82,22.97],["Lohja",60.25,24.07],["Hyvinkää",60.63,24.86],
+      ["Forssa",60.81,23.62],["Uusikaupunki",60.80,21.41],["Kouvola",60.87,26.70],
+      ["Nurmes",63.54,29.13],["Heinola",61.20,26.03],["Imatra",61.17,28.77],
+      ["Varkaus",62.31,27.87],["Pieksämäki",62.30,27.16],["Iisalmi",63.56,27.19],
+      ["Jämsä",61.86,25.19],["Äänekoski",62.60,25.73],["Kristiinankaupunki",62.27,21.38],
+      ["Pietarsaari",63.67,22.70],["Raahe",64.68,24.48],["Ylivieska",64.08,24.53],
+      ["Tornio",65.85,24.15],["Kuusamo",65.96,29.19],["Kemijärvi",66.71,27.43],
+      ["Sodankylä",67.42,26.59],["Kittilä",67.65,24.91],["Ivalo",68.66,27.54],
+      ["Utsjoki",69.91,27.03]
+    ]
+  },
+  eurooppa: {
+    pk: [
+      ["Helsinki",60.17,24.94],["Tukholma",59.33,18.06],["Oslo",59.91,10.75],
+      ["Kööpenhamina",55.68,12.57],["Reykjavik",64.15,-21.94],["Tallinna",59.44,24.75],
+      ["Riika",56.95,24.11],["Vilna",54.69,25.28],["Varsova",52.23,21.01],
+      ["Berliini",52.52,13.40],["Amsterdam",52.37,4.90],["Bryssel",50.85,4.35],
+      ["Luxemburg",49.61,6.13],["Pariisi",48.86,2.35],["Lontoo",51.51,-0.13],
+      ["Dublin",53.35,-6.26],["Lissabon",38.72,-9.14],["Madrid",40.42,-3.70],
+      ["Rooma",41.90,12.50],["Bern",46.95,7.45],["Wien",48.21,16.37],
+      ["Praha",50.08,14.44],["Bratislava",48.15,17.11],["Budapest",47.50,19.04],
+      ["Ljubljana",46.06,14.51],["Zagreb",45.81,15.98],["Sarajevo",43.86,18.41],
+      ["Belgrad",44.79,20.45],["Podgorica",42.44,19.26],["Tirana",41.33,19.82],
+      ["Skopje",42.00,21.43],["Ateena",37.98,23.73],["Sofia",42.70,23.32],
+      ["Bukarest",44.43,26.10],["Chișinău",47.01,28.86],["Kiova",50.45,30.52],
+      ["Minsk",53.90,27.57],["Moskova",55.76,37.62],["Ankara",39.93,32.86],
+      ["Nikosia",35.17,33.36],["Valletta",35.90,14.51]
+    ],
+    kau: [
+      ["Turku",60.45,22.27],["Oulu",65.01,25.47],["Rovaniemi",66.50,25.73],
+      ["Göteborg",57.71,11.97],["Bergen",60.39,5.32],["Pietari",59.93,30.34],
+      ["Gdańsk",54.35,18.65],["Krakova",50.06,19.94],["Hampuri",53.55,9.99],
+      ["München",48.14,11.58],["Frankfurt",50.11,8.68],["Köln",50.94,6.96],
+      ["Rotterdam",51.92,4.48],["Antwerpen",51.22,4.40],["Manchester",53.48,-2.24],
+      ["Liverpool",53.41,-2.98],["Birmingham",52.48,-1.90],["Glasgow",55.86,-4.25],
+      ["Edinburgh",55.95,-3.19],["Porto",41.15,-8.61],["Sevilla",37.39,-5.99],
+      ["Barcelona",41.39,2.17],["Bilbao",43.26,-2.94],["Marseille",43.30,5.37],
+      ["Lyon",45.76,4.84],["Nizza",43.70,7.27],["Milano",45.46,9.19],
+      ["Venetsia",45.44,12.32],["Firenze",43.77,11.26],["Napoli",40.85,14.27],
+      ["Palermo",38.12,13.36],["Zürich",47.37,8.54],["Geneve",46.20,6.14],
+      ["Dubrovnik",42.65,18.09],["Thessaloniki",40.64,22.94],["Istanbul",41.01,28.98],
+      ["Odessa",46.48,30.72]
+    ]
+  },
+  aasia: {
+    pk: [
+      ["Peking",39.90,116.40],["Tokio",35.68,139.69],["New Delhi",28.61,77.21],
+      ["Islamabad",33.69,73.06],["Dhaka",23.81,90.41],["Kabul",34.53,69.17],
+      ["Teheran",35.69,51.39],["Bagdad",33.31,44.36],["Riad",24.71,46.68],
+      ["Sana",15.35,44.21],["Maskat",23.59,58.41],["Abu Dhabi",24.45,54.38],
+      ["Jerusalem",31.77,35.21],["Amman",31.95,35.93],["Damaskos",33.51,36.29],
+      ["Astana",51.17,71.43],["Taškent",41.30,69.24],["Ašgabat",37.96,58.33],
+      ["Biškek",42.87,74.59],["Dušanbe",38.56,68.79],["Ulan Bator",47.89,106.91],
+      ["Pjongjang",39.03,125.75],["Soul",37.57,126.98],["Hanoi",21.03,105.85],
+      ["Vientiane",17.98,102.63],["Phnom Penh",11.55,104.92],["Bangkok",13.76,100.50],
+      ["Naypyidaw",19.76,96.08],["Kuala Lumpur",3.14,101.69],["Manila",14.60,120.98],
+      ["Colombo",6.93,79.85],["Kathmandu",27.72,85.32],["Tbilisi",41.72,44.79],
+      ["Jerevan",40.18,44.51],["Baku",40.41,49.87],["Taipei",25.03,121.57],
+      ["Jakarta",-6.21,106.85],["Singapore",1.35,103.82]
+    ],
+    kau: [
+      ["Shanghai",31.23,121.47],["Guangzhou",23.13,113.26],["Hongkong",22.32,114.17],
+      ["Chengdu",30.57,104.07],["Xi'an",34.34,108.94],["Osaka",34.69,135.50],
+      ["Busan",35.18,129.08],["Mumbai",19.08,72.88],["Kolkata",22.57,88.36],
+      ["Bengaluru",12.97,77.59],["Chennai",13.08,80.27],["Karachi",24.86,67.01],
+      ["Lahore",31.55,74.34],["Dubai",25.20,55.27],["Mekka",21.39,39.86],
+      ["Ho Chi Minh",10.82,106.63],["Surabaya",-7.25,112.75]
+    ]
+  },
+  afrikka: {
+    pk: [
+      ["Kairo",30.04,31.24],["Tripoli",32.89,13.19],["Tunis",36.81,10.18],
+      ["Alger",36.75,3.06],["Rabat",34.02,-6.84],["Nouakchott",18.08,-15.98],
+      ["Bamako",12.64,-8.00],["Niamey",13.51,2.13],["N'Djamena",12.13,15.06],
+      ["Khartum",15.50,32.56],["Juba",4.85,31.58],["Addis Abeba",9.03,38.74],
+      ["Asmara",15.34,38.93],["Mogadishu",2.05,45.32],["Nairobi",-1.29,36.82],
+      ["Dodoma",-6.16,35.75],["Kampala",0.35,32.58],["Kinshasa",-4.44,15.27],
+      ["Brazzaville",-4.26,15.24],["Abuja",9.06,7.50],["Accra",5.60,-0.19],
+      ["Yamoussoukro",6.83,-5.29],["Dakar",14.72,-17.47],["Conakry",9.64,-13.58],
+      ["Yaoundé",3.87,11.52],["Libreville",0.42,9.47],["Luanda",-8.84,13.23],
+      ["Lusaka",-15.39,28.32],["Harare",-17.83,31.05],["Maputo",-25.97,32.57],
+      ["Gaborone",-24.63,25.92],["Windhoek",-22.56,17.08],["Pretoria",-25.75,28.19],
+      ["Antananarivo",-18.88,47.51],["Ouagadougou",12.37,-1.52],
+      ["Lilongwe",-13.96,33.77],["Monrovia",6.29,-10.76]
+    ],
+    kau: [
+      ["Kapkaupunki",-33.93,18.42],["Johannesburg",-26.20,28.05],["Durban",-29.86,31.03],
+      ["Casablanca",33.57,-7.59],["Marrakech",31.63,-7.99],["Aleksandria",31.20,29.92],
+      ["Lagos",6.52,3.38],["Abidjan",5.36,-4.01],["Mombasa",-4.04,39.67],
+      ["Dar es Salaam",-6.79,39.21]
+    ]
+  },
+  pohjois_amerikka: {
+    pk: [
+      ["Washington",38.91,-77.04],["Ottawa",45.42,-75.70],["Mexico City",19.43,-99.13],
+      ["Guatemala",14.63,-90.51],["Tegucigalpa",14.07,-87.19],["Managua",12.11,-86.24],
+      ["San José",9.93,-84.08],["Panamá",8.98,-79.52],["Havanna",23.11,-82.37],
+      ["Port-au-Prince",18.54,-72.34],["Santo Domingo",18.49,-69.90],
+      ["Kingston",17.97,-76.79],["Nuuk",64.18,-51.72]
+    ],
+    kau: [
+      ["New York",40.71,-74.01],["Los Angeles",34.05,-118.24],["Chicago",41.88,-87.63],
+      ["Houston",29.76,-95.37],["Miami",25.76,-80.19],["San Francisco",37.77,-122.42],
+      ["Seattle",47.61,-122.33],["Las Vegas",36.17,-115.14],["Denver",39.74,-104.99],
+      ["New Orleans",29.95,-90.07],["Boston",42.36,-71.06],["Atlanta",33.75,-84.39],
+      ["Toronto",43.65,-79.38],["Montreal",45.50,-73.57],["Vancouver",49.28,-123.12],
+      ["Anchorage",61.22,-149.90],["Guadalajara",20.66,-103.35],["Cancún",21.16,-86.85]
+    ]
+  },
+  etela_amerikka: {
+    pk: [
+      ["Brasília",-15.79,-47.88],["Buenos Aires",-34.60,-58.38],["Santiago",-33.45,-70.66],
+      ["Lima",-12.05,-77.04],["La Paz",-16.50,-68.15],["Asunción",-25.26,-57.58],
+      ["Montevideo",-34.90,-56.16],["Bogotá",4.71,-74.07],["Caracas",10.48,-66.90],
+      ["Quito",-0.18,-78.47],["Georgetown",6.80,-58.16],["Paramaribo",5.87,-55.17]
+    ],
+    kau: [
+      ["Rio de Janeiro",-22.91,-43.17],["São Paulo",-23.55,-46.63],["Salvador",-12.97,-38.50],
+      ["Manaus",-3.12,-60.02],["Fortaleza",-3.72,-38.54],["Recife",-8.05,-34.88],
+      ["Belém",-1.46,-48.49],["Medellín",6.25,-75.56],["Cali",3.45,-76.53],
+      ["Guayaquil",-2.19,-79.89],["Cusco",-13.53,-71.97],["Valparaíso",-33.05,-71.62],
+      ["Córdoba",-31.42,-64.18],["Mendoza",-32.89,-68.85]
+    ]
+  },
+  oseania: {
+    pk: [
+      ["Canberra",-35.28,149.13],["Wellington",-41.29,174.78],["Port Moresby",-9.44,147.18],
+      ["Suva",-18.14,178.44],["Honiara",-9.43,159.95],["Port Vila",-17.73,168.32],
+      ["Dili",-8.56,125.57]
+    ],
+    kau: [
+      ["Sydney",-33.87,151.21],["Melbourne",-37.81,144.96],["Brisbane",-27.47,153.03],
+      ["Perth",-31.95,115.86],["Adelaide",-34.93,138.60],["Darwin",-12.46,130.84],
+      ["Cairns",-16.92,145.77],["Hobart",-42.88,147.33],["Alice Springs",-23.70,133.88],
+      ["Auckland",-36.85,174.76],["Christchurch",-43.53,172.64]
+    ]
+  }
+};
+
+function pointInPoly(x, y, flat) {
+  let inside = false;
+  for (let i = 0, j = flat.length - 2; i < flat.length; j = i, i += 2) {
+    const xi = flat[i], yi = flat[i + 1], xj = flat[j], yj = flat[j + 1];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi)
+      inside = !inside;
+  }
+  return inside;
+}
+
+function distToSegs(x, y, flat, closed) {
+  let best = Infinity;
+  const start = closed ? 0 : 2;
+  for (let i = start, j = closed ? flat.length - 2 : 0; i < flat.length; j = i, i += 2) {
+    const ax = flat[j], ay = flat[j + 1], bx = flat[i], by = flat[i + 1];
+    const dx = bx - ax, dy = by - ay;
+    const seg2 = dx * dx + dy * dy;
+    const t = seg2 ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / seg2)) : 0;
+    const d = Math.hypot(x - (ax + t * dx), y - (ay + t * dy));
+    if (d < best) best = d;
+  }
+  return best;
+}
+
+// Aluekohde (maa tai luonnonalue): polygonin sisällä, keskipisteen lähellä
+// tai rannikkotoleranssin päässä rajasta (rantakaupungit jäävät muuten mereen)
+function pointInArea(x, y, area, coastTol, ctrR) {
+  if (area.p.some(r => pointInPoly(x, y, r))) return true;
+  if (Math.hypot(x - area.c[0], y - area.c[1]) < ctrR) return true;
+  return area.p.some(r => distToSegs(x, y, r, true) < coastTol);
+}
+
+function nearLines(x, y, lines, r) {
+  return lines.some(l => distToSegs(x, y, l, false) <= r);
+}
+
+function distKm(x1, y1, x2, y2, kmpx) {
+  const km = Math.hypot(x2 - x1, y2 - y1) * kmpx;
+  return km >= 100 ? Math.round(km / 50) * 50 : Math.max(10, Math.round(km / 10) * 10);
+}
+
+function shuffle(arr, rnd) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// Arpoo kierroksen 10 tehtävää maanosan ja pelimuodon mukaan
+function makeTasks(mode, C, cities, rnd) {
+  rnd = rnd || Math.random;
+  const cityTask = c => {
+    const [x, y] = project(c[2], c[1], C);
+    return { kind: "city", name: c[0], x, y };
+  };
+  const countryTask = (c, i) => ({ kind: "country", name: c.n, x: c.c[0], y: c.c[1], ci: i });
+  const featTask = (f, i) => ({ kind: "feature", name: f.n, x: f.c[0], y: f.c[1], fi: i });
+  let pool = [];
+  if (mode === "pk" || mode === "seka") pool = pool.concat(cities.pk.map(cityTask));
+  if (mode === "kau" || mode === "seka") pool = pool.concat(cities.kau.map(cityTask));
+  // maatehtävät vain, jos alueella on useampi kohdemaa (Suomessa vain yksi)
+  if ((mode === "maa" || mode === "seka") && C.countries.length >= 2)
+    pool = pool.concat(C.countries.map(countryTask));
+  if (mode === "luonto" || mode === "seka") pool = pool.concat(C.features.map(featTask));
+  return shuffle(pool, rnd);   // koko kohdelista: peli päättyy kelloon tai kaikkien löytymiseen
+}
+
+// Aikahyökkäys: lähtöaika, bonus oikeasta, sakko väärästä (sekunteja)
+const START_TIME = 150, TIME_BONUS = 10, TIME_PENALTY = 10;
+const STREAK_EVERY = 10, STREAK_BONUS = 20;   // joka 10. löydöstä ekstra-aikaa
+
+function fmtTime(sec) {
+  sec = Math.max(0, Math.ceil(sec));
+  return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0");
+}
+
+// Tulosten vertailu: enemmän löydettyjä voittaa, tasatilanteessa enemmän aikaa jäljellä
+function betterResult(a, b) {
+  if (!b) return true;
+  if (a.f !== b.f) return a.f > b.f;
+  return (a.t || 0) > (b.t || 0);
+}
+
+/* ==================== Käyttöliittymä ==================== */
+if (typeof document !== "undefined") {
+  const $ = id => document.getElementById(id);
+  const svg = $("map"), heliEl = $("heli"), bodyEl = $("hbody"), rotorEl = $("rotor");
+  const MODE_NAMES = { pk: "Pääkaupungit", kau: "Suurkaupungit", maa: "Maat",
+                       luonto: "Luonnonkohteet", seka: "Sekoitus" };
+  // Suomen kartalla kaupunkimuodoilla on omat nimet
+  const MODE_NAMES_SUOMI = { pk: "Isot kaupungit", kau: "Pienet kaupungit" };
+  function modeName(m) {
+    return (contKey === "suomi" && MODE_NAMES_SUOMI[m]) || MODE_NAMES[m];
+  }
+  const CONT_ORDER = ["suomi", "eurooppa", "aasia", "afrikka",
+                      "pohjois_amerikka", "etela_amerikka", "oseania"];
+
+  // Tallennus
+  const STORE = "euroopankartta";
+  const SAVE_V = 5;   // version nosto nollaa vanhat ennätykset (v5: +10/−10 s -tasapaino)
+  let saved = { v: SAVE_V, best: {}, cont: "eurooppa" };
+  try {
+    const s = JSON.parse(localStorage.getItem(STORE) || "{}");
+    if (s.v === SAVE_V) saved = Object.assign(saved, s);
+  } catch (e) {}
+  function save() { try { localStorage.setItem(STORE, JSON.stringify(saved)); } catch (e) {} }
+
+  // Ääni
+  let actx = null;
+  function beep(freq, dur, delay, type) {
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      const t = actx.currentTime + (delay || 0);
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = type || "triangle"; o.frequency.value = freq;
+      g.gain.setValueAtTime(0.15, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      o.connect(g); g.connect(actx.destination);
+      o.start(t); o.stop(t + dur);
+    } catch (e) {}
+  }
+
+  // Pelitila
+  let C = null, contKey = null, cities = null, kmpx = 5;
+  // km-pohjaiset vakiot lasketaan maanosan mittakaavaan setContinent()issä
+  const K = { HIT: 17, SNAP: 22, LINE: 10, COAST: 7, CTR: 12,
+              VIEW: 210, SPEED: 130, ACCEL: 380, U: 1 };
+  const heli = { x: 500, y: 400, vx: 0, vy: 0, heading: 0, rotor: 0 };
+  const cam = { x: 500, y: 400 };
+  let state = "menu";          // menu | play | pause | end
+  let learn = false;           // opettelu: ei aikarajaa eikä ennätyksiä, nimet jäävät
+  let mode = "pk", tasks = [], taskIx = 0, found = 0, timeLeft = START_TIME;
+  let lastStickDown = 0, lastAttempt = 0, clockStr = "";
+  let flightTarget = null;
+  let pointerHeld = false;
+  const keys = new Set();
+  let toastTimer = 0, hintTimer = 0;
+
+  function setContinent(key) {
+    contKey = key;
+    C = CONTINENTS[key];
+    cities = CITY_DATA[key];
+    kmpx = kmPerPx(C);
+    // km-arvot on viritetty Euroopalle; muilla mantereilla ne kerrotaan
+    // kokokertoimella, jolloin pelituntuma on sama mantereen koosta riippumatta
+    const sc = sizeScale(C, CONTINENTS.eurooppa);
+    K.HIT = 85 * sc / kmpx;      // kaupunkiosuma 85 km × kokokerroin
+    K.SNAP = 110 * sc / kmpx;    // kosketuksen tarttuminen merkkiin 110 km × kk
+    K.LINE = 50 * sc / kmpx;     // jokiosuma 50 km × kk
+    K.COAST = 35 * sc / kmpx;    // rannikkotoleranssi 35 km × kk
+    K.CTR = 60 * sc / kmpx;      // keskipistefallback 60 km × kk
+    K.VIEW = 1050 * sc / kmpx;   // näkymä 1 050 km × kk lyhyemmällä ruutusivulla
+    K.SPEED = 650 * sc / kmpx;   // huippunopeus 650 km/s × kk
+    K.ACCEL = 1900 * sc / kmpx;
+    K.U = K.VIEW / 210;     // ui-mittakaava: grafiikan näyttökoko sama joka maanosassa
+    saved.cont = key; save();
+    drawMap();
+  }
+
+  function drawMap() {
+    const u = K.U.toFixed(2);
+    $("bg").setAttribute("d", C.bg);
+    $("bg").style.strokeWidth = u;
+    $("countries").innerHTML = C.countries.map((c, i) =>
+      `<path id="c${i}" class="country" d="${c.d}" style="stroke-width:${u}"/>`).join("");
+    $("lakes").setAttribute("d", C.lakes);
+    $("lakes").style.strokeWidth = (0.6 * K.U).toFixed(2);
+    $("rivers").setAttribute("d", C.rivers);
+    $("rivers").style.strokeWidth = (1.3 * K.U).toFixed(2);
+    $("mounts").setAttribute("d", C.mounts);
+    $("mounts").style.strokeWidth = (1.2 * K.U).toFixed(2);
+    $("dots").innerHTML = "";
+    $("labels").innerHTML = "";
+    const mini = $("mini");
+    mini.setAttribute("viewBox", `0 0 ${C.W} ${C.H}`);
+    mini.style.aspectRatio = C.W + " / " + C.H;
+    const sea = $("minisea");
+    sea.setAttribute("width", C.W); sea.setAttribute("height", C.H);
+    heli.x = C.W / 2; heli.y = C.H / 2; heli.vx = heli.vy = 0;
+    cam.x = heli.x; cam.y = heli.y;
+  }
+
+  function markerPool() {
+    const list = [];
+    const add = c => {
+      const [x, y] = project(c[2], c[1], C);
+      list.push({ name: c[0], x, y });
+    };
+    if (mode === "pk" || mode === "seka") cities.pk.forEach(add);
+    if (mode === "kau" || mode === "seka") cities.kau.forEach(add);
+    return list;
+  }
+
+  function drawDots() {
+    const r = (5 * K.U).toFixed(1), sw = (1.6 * K.U).toFixed(1);
+    $("dots").innerHTML = markerPool().map(p =>
+      `<circle class="dot" data-name="${p.name}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r}" stroke-width="${sw}"/>`
+    ).join("");
+    $("labels").innerHTML = "";
+    document.querySelectorAll(".country.found").forEach(el => el.classList.remove("found"));
+  }
+
+  function toast(html, ms) {
+    const t = $("toast");
+    t.innerHTML = html;
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove("show"), ms || 1800);
+  }
+
+  function hud() {
+    const t = tasks[taskIx];
+    const pre = { city: "Etsi kaupunki: ", country: "Etsi maa: ", feature: "Etsi: " };
+    $("task").innerHTML = t ? pre[t.kind] + "<b>" + t.name + "</b>" : "Maailman kartta";
+    updateClock(true);
+  }
+
+  function updateClock(force) {
+    if (!tasks.length || state === "menu") { $("stats").textContent = ""; return; }
+    const str = found + "/" + tasks.length + (learn ? " · 🎓" : " · " + fmtTime(timeLeft));
+    if (force || str !== clockStr) {
+      clockStr = str;
+      $("stats").textContent = str;
+      $("stats").style.color = !learn && timeLeft <= 30 ? "#ff9d8f" : "";
+    }
+  }
+
+  function bestText(b) {
+    if (!b) return "";
+    return b.f >= b.n
+      ? "Paras: kaikki " + b.n + " (" + fmtTime(b.t) + " jäljellä)"
+      : "Paras: " + b.f + "/" + b.n;
+  }
+
+  function showBests() {
+    for (const m of Object.keys(MODE_NAMES)) {
+      $("best-" + m).textContent = bestText(saved.best[contKey + ":" + m]);
+    }
+  }
+
+  function startGame(m) {
+    mode = m;
+    tasks = makeTasks(mode, C, cities);
+    taskIx = 0; found = 0; timeLeft = START_TIME;
+    drawDots();
+    $("start").classList.add("hidden");
+    $("end").classList.add("hidden");
+    heli.x = C.W / 2; heli.y = C.H / 2; heli.vx = heli.vy = 0;
+    cam.x = heli.x; cam.y = heli.y;
+    flightTarget = null;
+    beginTask();
+  }
+
+  function beginTask() {
+    state = "play";
+    const t = tasks[taskIx];
+    toast("Etsi: <b>" + t.name + "</b>");
+    hud();
+  }
+
+  function revealLabel(x, y, name) {
+    const el = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    el.setAttribute("x", x); el.setAttribute("y", y - 12 * K.U);
+    el.setAttribute("class", "label");
+    el.style.fontSize = (15 * K.U).toFixed(1) + "px";
+    el.style.strokeWidth = (3 * K.U).toFixed(1) + "px";
+    el.textContent = name;
+    $("labels").appendChild(el);
+    // normaalipelissä nimi näkyy vain juhlinnan ajan, ettei se peitä muita merkkejä;
+    // opettelussa nimet jäävät kartalle
+    if (!learn) {
+      setTimeout(() => {
+        el.style.opacity = 0;
+        setTimeout(() => el.remove(), 600);
+      }, 1100);
+    }
+  }
+
+  function pulseAt(x, y) {
+    const p = $("pulse");
+    p.setAttribute("cx", x); p.setAttribute("cy", y);
+    p.setAttribute("stroke-width", (4 * K.U).toFixed(1));
+    p.style.transition = "none";
+    p.setAttribute("r", 6 * K.U); p.setAttribute("opacity", 1);
+    requestAnimationFrame(() => {
+      p.style.transition = "all .9s ease-out";
+      p.setAttribute("r", 60 * K.U); p.setAttribute("opacity", 0);
+    });
+  }
+
+  function showHint(t) {
+    const ang = Math.atan2(t.y - heli.y, t.x - heli.x);
+    const hx = heli.x + Math.cos(ang) * 52 * K.U, hy = heli.y + Math.sin(ang) * 52 * K.U;
+    const h = $("hint");
+    h.setAttribute("transform",
+      `translate(${hx.toFixed(1)} ${hy.toFixed(1)}) rotate(${(ang * 180 / Math.PI).toFixed(1)}) scale(${K.U.toFixed(3)})`);
+    h.setAttribute("opacity", 1);
+    clearTimeout(hintTimer);
+    hintTimer = setTimeout(() => h.setAttribute("opacity", 0), 1800);
+  }
+
+  function attemptLanding() {
+    const t = tasks[taskIx];
+    let hit;
+    if (t.kind === "city") {
+      hit = Math.hypot(heli.x - t.x, heli.y - t.y) <= K.HIT;
+    } else if (t.kind === "country") {
+      hit = pointInArea(heli.x, heli.y, C.countries[t.ci], K.COAST, K.CTR);
+    } else {
+      const f = C.features[t.fi];
+      hit = f.k === "j" ? nearLines(heli.x, heli.y, f.l, K.LINE)
+                        : pointInArea(heli.x, heli.y, f, K.COAST, K.CTR);
+    }
+
+    if (hit) {
+      found++;
+      if (!learn) timeLeft += TIME_BONUS;
+      state = "pause";   // kello ei käy juhlinnan aikana
+      if (t.kind === "city") {
+        const dot = document.querySelector(`.dot[data-name="${t.name}"]`);
+        if (dot) dot.classList.add("found");
+      }
+      revealLabel(t.x, t.y, t.name);
+      if (t.kind === "city") pulseAt(t.x, t.y);
+      else if (t.kind === "country") {
+        $("c" + t.ci).classList.add("found");
+        pulseAt(heli.x, heli.y);
+      } else pulseAt(heli.x, heli.y);
+      if (found % STREAK_EVERY === 0) {
+        if (!learn) timeLeft += STREAK_BONUS;
+        toast(learn ? "Löytyi! Jo <b>" + found + "</b> löytöä!"
+                    : "Löytyi! <b>+" + TIME_BONUS + " s</b> · " + found +
+                      " löytöä: bonus <b>+" + STREAK_BONUS + " s</b>!", 1600);
+        beep(523, 0.1, 0); beep(659, 0.1, 0.1); beep(784, 0.1, 0.2); beep(1047, 0.25, 0.3);
+      } else {
+        toast(learn ? "Löytyi!" : "Löytyi! <b>+" + TIME_BONUS + " s</b>", 1200);
+        beep(523, 0.12, 0); beep(784, 0.22, 0.12);
+      }
+      hud();
+      setTimeout(nextTask, 1200);
+    } else {
+      if (!learn) timeLeft -= TIME_PENALTY;
+      const km = distKm(heli.x, heli.y, t.x, t.y, kmpx);
+      toast("Ei osunut!" + (learn ? "" : " <b>−" + TIME_PENALTY + " s</b> ·") +
+        " " + t.name + " on n. " + km + " km päässä.", 2200);
+      showHint(t);
+      beep(180, 0.28, 0, "sawtooth");
+      updateClock(true);
+      if (!learn && timeLeft <= 0) endGame(false);
+    }
+  }
+
+  function nextTask() {
+    taskIx++;
+    if (taskIx >= tasks.length) return endGame(true);
+    beginTask();
+  }
+
+  function endGame(cleared) {
+    state = "end";
+    const bkey = contKey + ":" + mode;
+    const result = { f: found, t: cleared ? Math.ceil(timeLeft) : 0, n: tasks.length };
+    const record = !learn && betterResult(result, saved.best[bkey]);
+    if (record) { saved.best[bkey] = result; save(); }
+    $("end").querySelector("h2").textContent = cleared ? "Kaikki löydetty!" : "Aika loppui!";
+    $("end").querySelector(".copter").textContent = cleared ? "🏆" : "⏰";
+    $("endscore").textContent = C.name + " · " + modeName(mode) +
+      (learn ? " · opettelu" : "") + " — löysit " + found + "/" + tasks.length +
+      (cleared && !learn ? " ja aikaa jäi " + fmtTime(timeLeft) : "");
+    $("endbest").innerHTML = record
+      ? '<span class="record">Uusi ennätys!</span>'
+      : learn ? "Opettelussa ennätyksiä ei tallenneta."
+      : bestText(saved.best[bkey]).replace("Paras:", "Paras tuloksesi:");
+    $("end").classList.remove("hidden");
+    showBests();
+    if (cleared) { beep(392, 0.15, 0); beep(523, 0.15, 0.15); beep(659, 0.3, 0.3); }
+    else { beep(330, 0.25, 0, "sawtooth"); beep(220, 0.4, 0.25, "sawtooth"); }
+  }
+
+  // Ohjaus: kosketus/hiiri karttaan
+  function svgPoint(e) {
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    return pt.matrixTransform(svg.getScreenCTM().inverse());
+  }
+
+  function setTarget(e) {
+    if (state !== "play") return;
+    const p = svgPoint(e);
+    let tx = Math.max(10, Math.min(C.W - 10, p.x));
+    let ty = Math.max(10, Math.min(C.H - 10, p.y));
+    // tartutaan lähimpään merkkiin, jos sellainen on aivan vieressä
+    let best = K.SNAP, snap = null;
+    for (const m of markerPool()) {
+      const d = Math.hypot(m.x - tx, m.y - ty);
+      if (d < best) { best = d; snap = m; }
+    }
+    if (snap) { tx = snap.x; ty = snap.y; }
+    flightTarget = { x: tx, y: ty };
+  }
+  svg.addEventListener("pointerdown", e => { e.preventDefault(); pointerHeld = true; setTarget(e); });
+  svg.addEventListener("pointermove", e => { if (pointerHeld && e.buttons) setTarget(e); });
+  addEventListener("pointerup", () => { pointerHeld = false; });
+  addEventListener("pointercancel", () => { pointerHeld = false; });
+
+  // Ohjaus: näppäimistö
+  addEventListener("keydown", e => {
+    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+      e.preventDefault();
+      keys.add(e.key);
+      flightTarget = null;
+    } else if ((e.key === " " || e.key === "Enter") && state === "play") {
+      e.preventDefault();
+      tryLand();
+    }
+  });
+  addEventListener("keyup", e => keys.delete(e.key));
+
+  // Laskeutuminen: tuplanapautus tattiin (tai välilyönti/Enter)
+  function tryLand() {
+    if (state !== "play") return;
+    const now = performance.now();
+    if (now - lastAttempt < 600) return;   // ei tuplasakkoja vahinkonapautuksista
+    lastAttempt = now;
+    attemptLanding();
+  }
+
+  // Ohjaus: tatti (virtuaalinen ohjaussauva)
+  const stickEl = $("stick"), knobEl = $("knob");
+  const STICK_R = 46;
+  let stick = null;   // {x, y} välillä -1…1, null kun tatti on vapaana
+  function stickMove(e) {
+    const r = stickEl.getBoundingClientRect();
+    let dx = e.clientX - (r.left + r.width / 2);
+    let dy = e.clientY - (r.top + r.height / 2);
+    const d = Math.hypot(dx, dy);
+    if (d > STICK_R) { dx *= STICK_R / d; dy *= STICK_R / d; }
+    knobEl.style.transform = `translate(calc(-50% + ${dx.toFixed(0)}px), calc(-50% + ${dy.toFixed(0)}px))`;
+    const m = Math.hypot(dx, dy) / STICK_R;
+    stick = m < 0.15 ? { x: 0, y: 0 } : { x: dx / STICK_R, y: dy / STICK_R };
+    flightTarget = null;
+  }
+  stickEl.addEventListener("pointerdown", e => {
+    e.preventDefault();
+    if (stickEl.setPointerCapture) stickEl.setPointerCapture(e.pointerId);
+    const now = performance.now();
+    if (now - lastStickDown < 350) { lastStickDown = 0; tryLand(); }
+    else lastStickDown = now;
+    stickMove(e);
+  });
+  stickEl.addEventListener("pointermove", e => { if (stick) stickMove(e); });
+  function stickEnd() {
+    stick = null;
+    knobEl.style.transform = "translate(-50%, -50%)";
+  }
+  stickEl.addEventListener("pointerup", stickEnd);
+  stickEl.addEventListener("pointercancel", stickEnd);
+  stickEl.addEventListener("contextmenu", e => e.preventDefault());
+
+  // Valikot
+  $("contbtns").innerHTML = CONT_ORDER.map(k =>
+    `<button data-cont="${k}">${CONTINENTS[k].name}</button>`).join("");
+  const contBtns = document.querySelectorAll("#contbtns button");
+  function selectContinent(key) {
+    setContinent(key);
+    contBtns.forEach(b => b.classList.toggle("sel", b.dataset.cont === key));
+    // pelimuotojen nimet alueen mukaan; Maat piiloon, jos kohdemaita on vain yksi
+    for (const m of Object.keys(MODE_NAMES)) $("lbl-" + m).textContent = modeName(m);
+    document.querySelector('#start .modes button[data-mode="maa"]').style.display =
+      C.countries.length >= 2 ? "" : "none";
+    showBests();
+  }
+  contBtns.forEach(b => b.addEventListener("click", () => selectContinent(b.dataset.cont)));
+  function setLearn(v) {
+    learn = v;
+    $("learnbtn").classList.toggle("sel", learn);
+    saved.learn = learn; save();
+  }
+  $("learnbtn").addEventListener("click", () => setLearn(!learn));
+  setLearn(!!saved.learn);
+  document.querySelectorAll("#start .modes button").forEach(b =>
+    b.addEventListener("click", () => startGame(b.dataset.mode)));
+  $("again").addEventListener("click", () => startGame(mode));
+  $("tomenu").addEventListener("click", () => {
+    $("end").classList.add("hidden");
+    $("start").classList.remove("hidden");
+    state = "menu";
+    hud();
+    showBests();
+  });
+
+  // Pelisilmukka
+  let prev = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - prev) / 1000);
+    prev = now;
+
+    if (state === "play" || state === "pause") {
+      // haluttu nopeus
+      let dvx = 0, dvy = 0;
+      if (stick && state === "play") {
+        dvx = stick.x * K.SPEED; dvy = stick.y * K.SPEED;
+      } else if (keys.size && state === "play") {
+        const dx = (keys.has("ArrowRight") ? 1 : 0) - (keys.has("ArrowLeft") ? 1 : 0);
+        const dy = (keys.has("ArrowDown") ? 1 : 0) - (keys.has("ArrowUp") ? 1 : 0);
+        const len = Math.hypot(dx, dy) || 1;
+        dvx = dx / len * K.SPEED; dvy = dy / len * K.SPEED;
+      } else if (flightTarget && state === "play") {
+        const dx = flightTarget.x - heli.x, dy = flightTarget.y - heli.y;
+        const d = Math.hypot(dx, dy);
+        if (d > 2) {
+          const sp = Math.min(K.SPEED, d * 4);
+          dvx = dx / d * sp; dvy = dy / d * sp;
+        } else flightTarget = null;
+      }
+      // kiihdytys kohti haluttua nopeutta
+      const ax = dvx - heli.vx, ay = dvy - heli.vy;
+      const al = Math.hypot(ax, ay);
+      if (al > 1) {
+        const a = Math.min(al, K.ACCEL * dt);
+        heli.vx += ax / al * a; heli.vy += ay / al * a;
+      } else { heli.vx = dvx; heli.vy = dvy; }
+
+      heli.x = Math.max(10, Math.min(C.W - 10, heli.x + heli.vx * dt));
+      heli.y = Math.max(10, Math.min(C.H - 10, heli.y + heli.vy * dt));
+
+      const speed = Math.hypot(heli.vx, heli.vy);
+      if (speed > K.SPEED * 0.1) heli.heading = Math.atan2(heli.vy, heli.vx) * 180 / Math.PI;
+      heli.rotor = (heli.rotor + (120 + speed * 2) * dt * 6) % 360;
+
+      // kello käy vain pelin aikana (ei löytöjuhlinnan eikä opettelussa)
+      if (state === "play" && !learn) {
+        timeLeft -= dt;
+        if (timeLeft <= 0) { timeLeft = 0; endGame(false); }
+        else updateClock();
+      }
+    }
+
+    // Kamera seuraa kopteria pienellä ennakolla; näkymä K.VIEW px lyhyemmällä sivulla
+    if (C) {
+      const aw = svg.clientWidth || 1, ah = svg.clientHeight || 1;
+      let vw, vh;
+      if (aw <= ah) { vw = K.VIEW; vh = K.VIEW * ah / aw; }
+      else { vh = K.VIEW; vw = K.VIEW * aw / ah; }
+      if (vw > C.W) { vh *= C.W / vw; vw = C.W; }
+      if (vh > C.H) { vw *= C.H / vh; vh = C.H; }
+      const k = Math.min(1, dt * 3);
+      cam.x += (heli.x + heli.vx * 0.35 - cam.x) * k;
+      cam.y += (heli.y + heli.vy * 0.35 - cam.y) * k;
+      const cx = Math.max(0, Math.min(C.W - vw, cam.x - vw / 2));
+      const cy = Math.max(0, Math.min(C.H - vh, cam.y - vh / 2));
+      svg.setAttribute("viewBox",
+        `${cx.toFixed(1)} ${cy.toFixed(1)} ${vw.toFixed(1)} ${vh.toFixed(1)}`);
+      const mv = $("miniview");
+      mv.setAttribute("x", cx.toFixed(0)); mv.setAttribute("y", cy.toFixed(0));
+      mv.setAttribute("width", vw.toFixed(0)); mv.setAttribute("height", vh.toFixed(0));
+      const mh = $("miniheli");
+      mh.setAttribute("cx", heli.x.toFixed(0)); mh.setAttribute("cy", heli.y.toFixed(0));
+      // minikartan merkit skaalataan maanosan kokoon
+      const ms = Math.max(C.W, C.H) / 1000;
+      mv.setAttribute("stroke-width", (14 * ms).toFixed(1));
+      mh.setAttribute("r", (20 * ms).toFixed(1));
+    }
+
+    heliEl.setAttribute("transform",
+      `translate(${heli.x.toFixed(1)} ${heli.y.toFixed(1)}) scale(${(0.6 * K.U).toFixed(3)})`);
+    bodyEl.setAttribute("transform", `rotate(${heli.heading.toFixed(1)})`);
+    rotorEl.setAttribute("transform", `rotate(${heli.rotor.toFixed(0)})`);
+    requestAnimationFrame(frame);
+  }
+
+  selectContinent(CONTINENTS[saved.cont] ? saved.cont : "eurooppa");
+  hud();
+  requestAnimationFrame(frame);
+  $("jswarn").style.display = "none";   // koodi käynnistyi asti tänne
+
+  // Webapp: service worker antaa offline-tuen, kun sivu on avattu
+  // suojatusta yhteydestä (https tai localhost); muuten rekisteröinti
+  // epäonnistuu hiljaa eikä haittaa pelaamista.
+  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+}
+</script>
+</body>
+</html>
