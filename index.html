@@ -119,6 +119,9 @@ window.addEventListener("error", function (e) {
   .conts button.sel { background: #2e9e44; border-color: #7fd992; }
   #learnbtn { width: 100%; margin-top: 4px; }
   #learnbtn.sel { background: #2e9e44; border-color: #7fd992; }
+  .diffs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; width: 100%; margin-top: 4px; }
+  .diffs button { font-size: 13.5px; padding: 9px 4px; }
+  .diffs button.sel { background: #2e9e44; border-color: #7fd992; }
   button .best { display: block; font-size: 12px; color: #cfc6ff; margin-top: 2px; }
   button.big { grid-column: 1 / -1; background: #2e9e44; border-color: #7fd992; font-size: 18px; padding: 14px; }
   .record { color: #ffd94a; font-weight: 700; font-size: 18px; }
@@ -177,10 +180,12 @@ window.addEventListener("error", function (e) {
     <div class="copter">🚁</div>
     <h1>MAAILMAN KARTTA</h1>
     <p>Lennä helikopterilla etsimääsi kohteeseen tatilla tai sormella karttaa koskettamalla. Kun olet kohteen päällä, <b>tuplanapauta tattia</b>, niin kopteri laskeutuu ja paikka tarkistetaan. Tietokoneella ohjaat nuolinäppäimillä ja laskeudut välilyönnillä.</p>
-    <p>Kello käy: aikaa on aluksi 2 min 30 s, oikea löytö antaa <b>+10 s</b> ja väärä paikka vie <b>−10 s</b>. Joka kymmenes löytö antaa <b>+20 s</b> ekstraa. Peli päättyy, kun kaikki kohteet on löydetty tai aika loppuu.</p>
+    <p>Kello käy: oikea löytö antaa <b>lisäaikaa</b> ja väärä paikka <b>vie sitä</b>. Ekstrabonuksen saa helpolla tasolla joka 10., keskitasolla joka 15. ja vaikealla joka 20. löydöstä. Lähtöaika ja sekuntimäärät riippuvat vaikeustasosta. Peli päättyy, kun kaikki kohteet on löydetty tai aika loppuu.</p>
     <p id="jswarn" style="color:#ffc4b8;font-weight:600">⚠️ Pelin koodi ei ole käynnistynyt, koska tämä katselin ei suorita JavaScriptiä. Avaa tiedosto Chromella: Chrome-valikko ⋮ → Lataukset. Sovellusten esikatselu ja HTML-katselin eivät kelpaa.</p>
     <p>Valitse alue:</p>
     <div class="conts" id="contbtns"></div>
+    <p>Valitse vaikeustaso:</p>
+    <div class="diffs" id="diffbtns"></div>
     <button id="learnbtn">🎓 Opettelu<span class="best">Ei aikarajaa, ennätyksiä ei tallenneta ja löydettyjen nimet jäävät kartalle</span></button>
     <p>Valitse pelimuoto:</p>
     <div class="modes">
@@ -505,9 +510,12 @@ function makeTasks(mode, C, cities, rnd) {
   return shuffle(pool, rnd);   // koko kohdelista: peli päättyy kelloon tai kaikkien löytymiseen
 }
 
-// Aikahyökkäys: lähtöaika, bonus oikeasta, sakko väärästä (sekunteja)
-const START_TIME = 150, TIME_BONUS = 10, TIME_PENALTY = 10;
-const STREAK_EVERY = 10, STREAK_BONUS = 20;   // joka 10. löydöstä ekstra-aikaa
+// Vaikeustasot: lähtöaika, bonus oikeasta, sakko väärästä, putkibonus joka every. löydöstä (sekunteja)
+const DIFFS = {
+  helppo:    { name: "Helppo",    icon: "😊", start: 150, bonus: 10, penalty: 10, streak: 10, every: 10 },
+  keskitaso: { name: "Keskitaso", icon: "🙂", start: 120, bonus: 5,  penalty: 15, streak: 10, every: 15 },
+  vaikea:    { name: "Vaikea",    icon: "😈", start: 75,  bonus: 3,  penalty: 20, streak: 10, every: 20 }
+};
 
 function fmtTime(sec) {
   sec = Math.max(0, Math.ceil(sec));
@@ -540,7 +548,7 @@ if (typeof document !== "undefined") {
 
   // Tallennus
   const STORE = "euroopankartta";
-  const SAVE_V = 5;   // version nosto nollaa vanhat ennätykset (v5: +10/−10 s -tasapaino)
+  const SAVE_V = 6;   // version nosto nollaa vanhat ennätykset (v6: vaikeustasot)
   let saved = { v: SAVE_V, best: {}, cont: "eurooppa" };
   try {
     const s = JSON.parse(localStorage.getItem(STORE) || "{}");
@@ -572,7 +580,9 @@ if (typeof document !== "undefined") {
   const cam = { x: 500, y: 400 };
   let state = "menu";          // menu | play | pause | end
   let learn = false;           // opettelu: ei aikarajaa eikä ennätyksiä, nimet jäävät
-  let mode = "pk", tasks = [], taskIx = 0, found = 0, timeLeft = START_TIME;
+  let diff = "keskitaso";      // vaikeustaso, ks. DIFFS
+  const D = () => DIFFS[diff];
+  let mode = "pk", tasks = [], taskIx = 0, found = 0, timeLeft = 0;
   let lastStickDown = 0, lastAttempt = 0, clockStr = "";
   let flightTarget = null;
   let pointerHeld = false;
@@ -682,14 +692,14 @@ if (typeof document !== "undefined") {
 
   function showBests() {
     for (const m of Object.keys(MODE_NAMES)) {
-      $("best-" + m).textContent = bestText(saved.best[contKey + ":" + m]);
+      $("best-" + m).textContent = bestText(saved.best[contKey + ":" + m + ":" + diff]);
     }
   }
 
   function startGame(m) {
     mode = m;
     tasks = makeTasks(mode, C, cities);
-    taskIx = 0; found = 0; timeLeft = START_TIME;
+    taskIx = 0; found = 0; timeLeft = D().start;
     drawDots();
     $("start").classList.add("hidden");
     $("end").classList.add("hidden");
@@ -762,7 +772,7 @@ if (typeof document !== "undefined") {
 
     if (hit) {
       found++;
-      if (!learn) timeLeft += TIME_BONUS;
+      if (!learn) timeLeft += D().bonus;
       state = "pause";   // kello ei käy juhlinnan aikana
       if (t.kind === "city") {
         const dot = document.querySelector(`.dot[data-name="${t.name}"]`);
@@ -774,22 +784,22 @@ if (typeof document !== "undefined") {
         $("c" + t.ci).classList.add("found");
         pulseAt(heli.x, heli.y);
       } else pulseAt(heli.x, heli.y);
-      if (found % STREAK_EVERY === 0) {
-        if (!learn) timeLeft += STREAK_BONUS;
+      if (found % D().every === 0) {
+        if (!learn) timeLeft += D().streak;
         toast(learn ? "Löytyi! Jo <b>" + found + "</b> löytöä!"
-                    : "Löytyi! <b>+" + TIME_BONUS + " s</b> · " + found +
-                      " löytöä: bonus <b>+" + STREAK_BONUS + " s</b>!", 1600);
+                    : "Löytyi! <b>+" + D().bonus + " s</b> · " + found +
+                      " löytöä: bonus <b>+" + D().streak + " s</b>!", 1600);
         beep(523, 0.1, 0); beep(659, 0.1, 0.1); beep(784, 0.1, 0.2); beep(1047, 0.25, 0.3);
       } else {
-        toast(learn ? "Löytyi!" : "Löytyi! <b>+" + TIME_BONUS + " s</b>", 1200);
+        toast(learn ? "Löytyi!" : "Löytyi! <b>+" + D().bonus + " s</b>", 1200);
         beep(523, 0.12, 0); beep(784, 0.22, 0.12);
       }
       hud();
       setTimeout(nextTask, 1200);
     } else {
-      if (!learn) timeLeft -= TIME_PENALTY;
+      if (!learn) timeLeft -= D().penalty;
       const km = distKm(heli.x, heli.y, t.x, t.y, kmpx);
-      toast("Ei osunut!" + (learn ? "" : " <b>−" + TIME_PENALTY + " s</b> ·") +
+      toast("Ei osunut!" + (learn ? "" : " <b>−" + D().penalty + " s</b> ·") +
         " " + t.name + " on n. " + km + " km päässä.", 2200);
       showHint(t);
       beep(180, 0.28, 0, "sawtooth");
@@ -806,14 +816,14 @@ if (typeof document !== "undefined") {
 
   function endGame(cleared) {
     state = "end";
-    const bkey = contKey + ":" + mode;
+    const bkey = contKey + ":" + mode + ":" + diff;
     const result = { f: found, t: cleared ? Math.ceil(timeLeft) : 0, n: tasks.length };
     const record = !learn && betterResult(result, saved.best[bkey]);
     if (record) { saved.best[bkey] = result; save(); }
     $("end").querySelector("h2").textContent = cleared ? "Kaikki löydetty!" : "Aika loppui!";
     $("end").querySelector(".copter").textContent = cleared ? "🏆" : "⏰";
     $("endscore").textContent = C.name + " · " + modeName(mode) +
-      (learn ? " · opettelu" : "") + " — löysit " + found + "/" + tasks.length +
+      (learn ? " · opettelu" : " · " + D().name.toLowerCase()) + " — löysit " + found + "/" + tasks.length +
       (cleared && !learn ? " ja aikaa jäi " + fmtTime(timeLeft) : "");
     $("endbest").innerHTML = record
       ? '<span class="record">Uusi ennätys!</span>'
@@ -922,6 +932,20 @@ if (typeof document !== "undefined") {
     showBests();
   }
   contBtns.forEach(b => b.addEventListener("click", () => selectContinent(b.dataset.cont)));
+  $("diffbtns").innerHTML = Object.keys(DIFFS).map(k => {
+    const d = DIFFS[k];
+    return `<button data-diff="${k}">${d.icon} ${d.name}<span class="best">` +
+      `${fmtTime(d.start)} · +${d.bonus} s / −${d.penalty} s</span></button>`;
+  }).join("");
+  const diffBtns = document.querySelectorAll("#diffbtns button");
+  function setDiff(k) {
+    diff = DIFFS[k] ? k : "keskitaso";
+    diffBtns.forEach(b => b.classList.toggle("sel", b.dataset.diff === diff));
+    saved.diff = diff; save();
+    if (contKey) showBests();   // ennätykset ovat tasokohtaisia
+  }
+  diffBtns.forEach(b => b.addEventListener("click", () => setDiff(b.dataset.diff)));
+  setDiff(saved.diff);
   function setLearn(v) {
     learn = v;
     $("learnbtn").classList.toggle("sel", learn);

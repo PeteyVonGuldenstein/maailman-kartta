@@ -143,12 +143,14 @@ assert(inFeature(OC, "Tasmania", 146.5, -42.0), "Tasmania osuu");
 const sea = project(-15, 50, EU);
 assert(!EU.countries.some(c => pointInArea(sea[0], sea[1], c, 7, 12)), "Atlantti ei ole maa");
 
-// Aikahyökkäys
-assert.strictEqual(START_TIME, 150, "lähtöaika 2 min 30 s");
-assert.strictEqual(TIME_BONUS, 10, "bonus +10 s");
-assert.strictEqual(TIME_PENALTY, 10, "sakko -10 s");
-assert.strictEqual(STREAK_EVERY, 10, "bonus joka 10. löydöstä");
-assert.strictEqual(STREAK_BONUS, 20, "sarjabonus +20 s");
+// Aikahyökkäys: vaikeustasot
+assert.deepStrictEqual(Object.keys(DIFFS), ["helppo", "keskitaso", "vaikea"], "kolme vaikeustasoa");
+assert.deepStrictEqual([DIFFS.helppo.start, DIFFS.helppo.bonus, DIFFS.helppo.penalty, DIFFS.helppo.streak, DIFFS.helppo.every],
+  [150, 10, 10, 10, 10], "helppo: 2 min 30 s, +10/−10 s, putki +10 s joka 10.");
+assert.deepStrictEqual([DIFFS.keskitaso.start, DIFFS.keskitaso.bonus, DIFFS.keskitaso.penalty, DIFFS.keskitaso.streak, DIFFS.keskitaso.every],
+  [120, 5, 15, 10, 15], "keskitaso: 2 min, +5/−15 s, putki +10 s joka 15.");
+assert.deepStrictEqual([DIFFS.vaikea.start, DIFFS.vaikea.bonus, DIFFS.vaikea.penalty, DIFFS.vaikea.streak, DIFFS.vaikea.every],
+  [75, 3, 20, 10, 20], "vaikea: 1 min 15 s, +3/−20 s, putki +10 s joka 20.");
 assert.strictEqual(fmtTime(150), "2:30", "ajan muotoilu");
 assert.strictEqual(fmtTime(65), "1:05", "ajan muotoilu, etunolla");
 assert.strictEqual(fmtTime(-3), "0:00", "ei negatiivista aikaa");
