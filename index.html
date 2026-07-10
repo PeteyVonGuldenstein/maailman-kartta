@@ -49,7 +49,8 @@ window.addEventListener("error", function (e) {
     background: #79b7d8; opacity: .92; pointer-events: none;
   }
   #stick {
-    position: absolute; left: 14px; bottom: 14px; z-index: 2;
+    position: absolute; left: 14px; z-index: 2;
+    bottom: max(14px, env(safe-area-inset-bottom));
     width: 128px; height: 128px; border-radius: 50%;
     background: rgba(64, 49, 141, .35);
     border: 2px solid rgba(120, 105, 196, .7);
@@ -90,11 +91,19 @@ window.addEventListener("error", function (e) {
   .overlay {
     position: absolute; inset: 0; z-index: 5;
     background: #40318d; color: #b9aefc;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 14px; padding: 24px; text-align: center; overflow-y: auto;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 16px; padding-bottom: max(16px, env(safe-area-inset-bottom));
+    text-align: center; overflow-y: auto;
   }
   .overlay.hidden { display: none; }
-  .frame { border: 10px solid #7869c4; padding: 20px 24px; border-radius: 4px; max-width: 480px; width: 100%; }
+  .frame {
+    border: 10px solid #7869c4; padding: 20px 24px; border-radius: 4px;
+    max-width: 480px; width: 100%;
+    /* margin auto keskittää, kun sisältö mahtuu ruutuun, ja sallii
+       rullauksen alusta loppuun, kun ei mahdu (justify-content: center
+       leikkaisi yläreunan rullausalueen ulkopuolelle) */
+    margin: auto;
+  }
   .overlay h1 { font-family: ui-monospace, "Courier New", monospace; color: #fff; font-size: clamp(22px, 6.5vw, 34px); letter-spacing: 1px; }
   .overlay h2 { color: #fff; font-size: clamp(20px, 6vw, 30px); }
   .overlay p { font-size: 14.5px; line-height: 1.45; margin: 6px 0; }
