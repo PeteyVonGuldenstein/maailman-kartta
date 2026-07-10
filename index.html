@@ -177,6 +177,7 @@ window.addEventListener("error", function (e) {
     <div class="modes">
       <button data-mode="pk"><span id="lbl-pk">Pääkaupungit</span><span class="best" id="best-pk"></span></button>
       <button data-mode="kau"><span id="lbl-kau">Suurkaupungit</span><span class="best" id="best-kau"></span></button>
+      <button data-mode="opk"><span id="lbl-opk">Pääkaupungit</span><span class="best" id="best-opk"></span></button>
       <button data-mode="maa"><span id="lbl-maa">Maat</span><span class="best" id="best-maa"></span></button>
       <button data-mode="luonto"><span id="lbl-luonto">Luonnonkohteet</span><span class="best" id="best-luonto"></span></button>
       <button data-mode="seka" style="grid-column:1/-1"><span id="lbl-seka">Sekoitus</span><span class="best" id="best-seka"></span></button>
@@ -268,6 +269,25 @@ const CITY_DATA = {
       ["Sacramento",38.58,-121.49],["Fresno",36.75,-119.77],["Omaha",41.26,-95.93],
       ["Louisville",38.25,-85.76],["Des Moines",41.59,-93.62],["Boise",43.62,-116.20],
       ["Billings",45.78,-108.50]
+    ],
+    // osavaltioiden pääkaupungit — oma pelimuoto vain USA:n kartalla
+    opk: [
+      ["Montgomery",32.38,-86.30],["Phoenix",33.45,-112.07],["Little Rock",34.75,-92.29],
+      ["Sacramento",38.58,-121.49],["Denver",39.74,-104.99],["Hartford",41.76,-72.67],
+      ["Dover",39.16,-75.52],["Tallahassee",30.44,-84.28],["Atlanta",33.75,-84.39],
+      ["Boise",43.62,-116.20],["Springfield",39.80,-89.65],["Indianapolis",39.77,-86.16],
+      ["Des Moines",41.59,-93.62],["Topeka",39.05,-95.68],["Frankfort",38.20,-84.87],
+      ["Baton Rouge",30.45,-91.19],["Augusta",44.31,-69.78],["Annapolis",38.98,-76.49],
+      ["Boston",42.36,-71.06],["Lansing",42.73,-84.56],["St. Paul",44.95,-93.09],
+      ["Jackson",32.30,-90.18],["Jefferson City",38.58,-92.17],["Helena",46.59,-112.04],
+      ["Lincoln",40.81,-96.68],["Carson City",39.16,-119.77],["Concord",43.21,-71.54],
+      ["Trenton",40.22,-74.76],["Santa Fe",35.69,-105.94],["Albany",42.65,-73.75],
+      ["Raleigh",35.78,-78.64],["Bismarck",46.81,-100.78],["Columbus",39.96,-83.00],
+      ["Oklahoma City",35.47,-97.52],["Salem",44.94,-123.04],["Harrisburg",40.27,-76.88],
+      ["Providence",41.82,-71.41],["Columbia",34.00,-81.03],["Pierre",44.37,-100.35],
+      ["Nashville",36.16,-86.78],["Austin",30.27,-97.74],["Salt Lake City",40.76,-111.89],
+      ["Montpelier",44.26,-72.58],["Richmond",37.54,-77.44],["Olympia",47.04,-122.90],
+      ["Madison",43.07,-89.40],["Charleston",38.35,-81.63],["Cheyenne",41.14,-104.82]
     ]
   },
   eurooppa: {
@@ -460,10 +480,19 @@ function makeTasks(mode, C, cities, rnd) {
   let pool = [];
   if (mode === "pk" || mode === "seka") pool = pool.concat(cities.pk.map(cityTask));
   if (mode === "kau" || mode === "seka") pool = pool.concat(cities.kau.map(cityTask));
+  // osavaltioiden pääkaupungit vain alueilla, joilla lista on (USA)
+  if ((mode === "opk" || mode === "seka") && cities.opk)
+    pool = pool.concat(cities.opk.map(cityTask));
   // maatehtävät vain, jos alueella on useampi kohdemaa (Suomessa vain yksi)
   if ((mode === "maa" || mode === "seka") && C.countries.length >= 2)
     pool = pool.concat(C.countries.map(countryTask));
   if (mode === "luonto" || mode === "seka") pool = pool.concat(C.features.map(featTask));
+  // sama kaupunki voi olla monessa listassa (esim. Boston: suurkaupunki JA pääkaupunki)
+  const seen = new Set();
+  pool = pool.filter(t => {
+    const k = t.kind + ":" + t.name;
+    return seen.has(k) ? false : (seen.add(k), true);
+  });
   return shuffle(pool, rnd);   // koko kohdelista: peli päättyy kelloon tai kaikkien löytymiseen
 }
 
@@ -487,8 +516,8 @@ function betterResult(a, b) {
 if (typeof document !== "undefined") {
   const $ = id => document.getElementById(id);
   const svg = $("map"), heliEl = $("heli"), bodyEl = $("hbody"), rotorEl = $("rotor");
-  const MODE_NAMES = { pk: "Pääkaupungit", kau: "Suurkaupungit", maa: "Maat",
-                       luonto: "Luonnonkohteet", seka: "Sekoitus" };
+  const MODE_NAMES = { pk: "Pääkaupungit", kau: "Suurkaupungit", opk: "Pääkaupungit",
+                       maa: "Maat", luonto: "Luonnonkohteet", seka: "Sekoitus" };
   // aluekohtaiset pelimuotojen nimet (Suomi: kaupungit; USA: osavaltiot)
   const MODE_OVERRIDES = {
     suomi: { pk: "Isot kaupungit", kau: "Pienet kaupungit" },
@@ -587,12 +616,16 @@ if (typeof document !== "undefined") {
 
   function markerPool() {
     const list = [];
+    const seen = new Set();
     const add = c => {
+      if (seen.has(c[0])) return;   // sama kaupunki voi olla monessa listassa
+      seen.add(c[0]);
       const [x, y] = project(c[2], c[1], C);
       list.push({ name: c[0], x, y });
     };
     if (mode === "pk" || mode === "seka") cities.pk.forEach(add);
     if (mode === "kau" || mode === "seka") cities.kau.forEach(add);
+    if ((mode === "opk" || mode === "seka") && cities.opk) cities.opk.forEach(add);
     return list;
   }
 
@@ -870,10 +903,13 @@ if (typeof document !== "undefined") {
   function selectContinent(key) {
     setContinent(key);
     contBtns.forEach(b => b.classList.toggle("sel", b.dataset.cont === key));
-    // pelimuotojen nimet alueen mukaan; Maat piiloon, jos kohdemaita on vain yksi
+    // pelimuotojen nimet alueen mukaan; Maat piiloon, jos kohdemaita on vain yksi,
+    // ja osavaltioiden pääkaupungit näkyviin vain, jos alueella on opk-lista
     for (const m of Object.keys(MODE_NAMES)) $("lbl-" + m).textContent = modeName(m);
     document.querySelector('#start .modes button[data-mode="maa"]').style.display =
       C.countries.length >= 2 ? "" : "none";
+    document.querySelector('#start .modes button[data-mode="opk"]').style.display =
+      cities.opk ? "" : "none";
     showBests();
   }
   contBtns.forEach(b => b.addEventListener("click", () => selectContinent(b.dataset.cont)));

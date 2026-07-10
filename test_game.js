@@ -47,12 +47,15 @@ for (const key of KEYS) {
     const [x, y] = project(c[2], c[1], C);
     assert(x >= 0 && x <= C.W && y >= 0 && y <= C.H, key + ": " + c[0] + " kartalla");
   }
-  // maatehtävät vain, jos kohdemaita on useampi (Suomessa vain yksi)
+  // maatehtävät vain, jos kohdemaita on useampi (Suomessa vain yksi);
+  // sekoituksessa sama kaupunki lasketaan kerran (esim. Boston: suurkaupunki + pääkaupunki)
   const nc = C.countries.length >= 2 ? C.countries.length : 0;
-  const poolSize = { pk: cities.pk.length, kau: cities.kau.length,
+  const opk = cities.opk || [];
+  const uniqCities = new Set([...cities.pk, ...cities.kau, ...opk].map(c => c[0])).size;
+  const poolSize = { pk: cities.pk.length, kau: cities.kau.length, opk: opk.length,
     maa: nc, luonto: C.features.length,
-    seka: cities.pk.length + cities.kau.length + nc + C.features.length };
-  for (const mode of ["pk", "kau", "maa", "luonto", "seka"]) {
+    seka: uniqCities + nc + C.features.length };
+  for (const mode of ["pk", "kau", "opk", "maa", "luonto", "seka"]) {
     const t = makeTasks(mode, C, cities, rnd);
     assert.strictEqual(t.length, poolSize[mode], key + "/" + mode + ": koko kohdelista");
     assert.strictEqual(new Set(t.map(x => x.kind + ":" + x.name)).size, t.length, key + "/" + mode + ": ei toistoja");
@@ -84,6 +87,17 @@ assert(inCountry(US, "Kalifornia", -118.24, 34.05), "Los Angeles on Kaliforniass
 assert(inCountry(US, "Texas", -95.37, 29.76), "Houston on Texasissa");
 assert(inCountry(US, "New York", -78.88, 42.89), "Buffalo on New Yorkin osavaltiossa");
 assert(!inCountry(US, "Nevada", -118.24, 34.05), "Los Angeles ei ole Nevadassa");
+assert.strictEqual(CITY_DATA.usa.opk.length, 48, "48 osavaltion pääkaupunkia");
+{ // jokainen pääkaupunki on jonkin osavaltion alueella
+  const t = tol(US);
+  for (const c of CITY_DATA.usa.opk) {
+    const [x, y] = project(c[2], c[1], US);
+    assert(US.countries.some(s => pointInArea(x, y, s, t.coast, t.ctr)),
+      c[0] + " on osavaltiossa");
+  }
+}
+assert(inCountry(US, "Kalifornia", -121.49, 38.58), "Sacramento on Kaliforniassa");
+assert(inCountry(US, "Texas", -97.74, 30.27), "Austin on Texasissa");
 assert(inFeature(US, "Yläjärvi", -87.5, 47.6), "Yläjärvi osuu");
 assert(inFeature(US, "Mississippi", -90.05, 35.15), "Memphis on Mississippin varrella");
 assert(inFeature(US, "Grand Canyon", -112.1, 36.1), "Grand Canyon osuu");
