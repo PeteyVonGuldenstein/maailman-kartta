@@ -342,6 +342,14 @@ MOUNTAIN_FI = {
     "Eteläalpit", "Iso Vedenjakajavuoristo", "Sierra Nevada", "Kaskadit",
 }
 
+# Muut symboloitavat aluetyypit: symbolipolku generoidaan kuten vuorille
+DESERT_FI = {"Sahara", "Kalahari", "Namibin aavikko", "Gobi", "Atacama",
+             "Iso Victorianaavikko"}
+PLATEAU_FI = {"Tiibetin ylänkö", "Suuret tasangot", "Patagonia", "Pampa"}
+FOREST_FI = {"Amazonin allas", "Kongon allas"}
+WETLAND_FI = {"Pantanal"}
+CANYON_FI = {"Grand Canyon"}
+
 
 # ---------------------------------------------------------------- geometria
 
@@ -575,13 +583,13 @@ def point_in_ring(x, y, ring):
     return inside
 
 
-def mountain_marks(rings, u):
-    """Huippusymbolien (^) sijainnit vuoristopolygonin sisällä.
+def mountain_marks(rings, u, step_u=26.0):
+    """Symbolien sijainnit aluepolygonin sisällä (heksamainen ruudukko).
 
-    Heksamainen ruudukko, jonka väli skaalataan ui-kertoimella u niin,
-    että symbolitiheys näyttää samalta joka maanosassa.
+    Väli skaalataan ui-kertoimella u niin, että symbolitiheys näyttää
+    samalta joka maanosassa; step_u säätää tiheyttä symbolityypeittäin.
     """
-    step = 26.0 * u
+    step = step_u * u
     xs = [p[0] for r in rings for p in r]
     ys = [p[1] for r in rings for p in r]
     marks = []
@@ -605,6 +613,61 @@ def mountain_path(marks, u):
         parts.append(f"M{x - s:.1f} {y + s * 0.7:.1f}"
                      f"L{x:.1f} {y - s * 0.9:.1f}"
                      f"L{x + s:.1f} {y + s * 0.7:.1f}")
+    return "".join(parts)
+
+
+def dune_path(marks, u):
+    """Aavikon dyynikaari (matala ⌒)."""
+    s = 4.5 * u
+    parts = []
+    for x, y in marks:
+        parts.append(f"M{x - s:.1f} {y:.1f}"
+                     f"Q{x:.1f} {y - s * 1.1:.1f} {x + s:.1f} {y:.1f}")
+    return "".join(parts)
+
+
+def plateau_path(marks, u):
+    """Ylängön/tasangon vaakaviiva."""
+    s = 4.5 * u
+    parts = []
+    for x, y in marks:
+        parts.append(f"M{x - s:.1f} {y:.1f}L{x + s:.1f} {y:.1f}")
+    return "".join(parts)
+
+
+def tree_path(marks, u):
+    """Sademetsän puusymboli: latvusympyrä ja runko."""
+    r = 2.6 * u
+    parts = []
+    for x, y in marks:
+        parts.append(f"M{x - r:.1f} {y:.1f}"
+                     f"A{r:.1f} {r:.1f} 0 1 1 {x + r:.1f} {y:.1f}"
+                     f"A{r:.1f} {r:.1f} 0 1 1 {x - r:.1f} {y:.1f}"
+                     f"M{x:.1f} {y + r:.1f}L{x:.1f} {y + r * 2.2:.1f}")
+    return "".join(parts)
+
+
+def marsh_path(marks, u):
+    """Kosteikon suomerkki: vaakaviiva ja pystytupsut."""
+    s = 4.5 * u
+    parts = []
+    for x, y in marks:
+        parts.append(f"M{x - s:.1f} {y:.1f}L{x + s:.1f} {y:.1f}"
+                     f"M{x - s * 0.55:.1f} {y:.1f}L{x - s * 0.55:.1f} {y - s * 0.7:.1f}"
+                     f"M{x:.1f} {y:.1f}L{x:.1f} {y - s * 0.9:.1f}"
+                     f"M{x + s * 0.55:.1f} {y:.1f}L{x + s * 0.55:.1f} {y - s * 0.7:.1f}")
+    return "".join(parts)
+
+
+def canyon_path(marks, u):
+    """Kanjonin siksak-viiva."""
+    s = 4.5 * u
+    parts = []
+    for x, y in marks:
+        parts.append(f"M{x - s * 1.4:.1f} {y + s * 0.5:.1f}"
+                     f"L{x - s * 0.5:.1f} {y - s * 0.5:.1f}"
+                     f"L{x + s * 0.5:.1f} {y + s * 0.5:.1f}"
+                     f"L{x + s * 1.4:.1f} {y - s * 0.5:.1f}")
     return "".join(parts)
 
 
@@ -713,7 +776,16 @@ def main():
         u = (1050.0 * sc / kmpx) / 210.0
         features = []
         river_draw = []
-        mount_marks = []
+        # symbolikohteet: nimijoukko, ruudukon tiheys ja polkugeneraattori
+        symbol_types = {
+            "mounts":   (MOUNTAIN_FI, 26.0, mountain_path),
+            "deserts":  (DESERT_FI,   30.0, dune_path),
+            "plateaus": (PLATEAU_FI,  30.0, plateau_path),
+            "forests":  (FOREST_FI,   28.0, tree_path),
+            "wetlands": (WETLAND_FI,  16.0, marsh_path),
+            "canyons":  (CANYON_FI,   16.0, canyon_path),
+        }
+        symbol_marks = {k: [] for k in symbol_types}
         for fi, kind, ne_names in cfg["features"]:
             wanted = set(ne_names)
             if kind == "river":
@@ -742,8 +814,12 @@ def main():
                 features.append({"n": fi, "k": "a",
                                  "c": rings_centroid(rings),
                                  "p": flat(rings)})
-                if fi in MOUNTAIN_FI:
-                    mount_marks.extend(mountain_marks(rings, u))
+                for sk, (names, step_u, _) in symbol_types.items():
+                    if fi in names:
+                        # pieni alue voi jäädä ruudukolta väliin: silloin keskipiste
+                        marks = mountain_marks(rings, u, step_u)
+                        symbol_marks[sk].extend(marks or [tuple(rings_centroid(rings))])
+                        break
 
         world[key] = {
             "name": cfg["name"], "W": W, "H": H,
@@ -752,12 +828,14 @@ def main():
             "countries": targets, "bg": "".join(bg),
             "lakes": path_d(lake_rings),
             "rivers": path_d(river_draw, close=False),
-            "mounts": mountain_path(mount_marks, u),
             "features": features,
         }
+        for sk, (_, _, pathfn) in symbol_types.items():
+            world[key][sk] = pathfn(symbol_marks[sk], u)
         print(f"{cfg['name']}: {W:.0f}x{H}, maita {len(targets)}, "
               f"taustaa {len(bg)}, järvirenkaita {len(lake_rings)}, "
-              f"luonnonkohteita {len(features)}, vuorisymboleita {len(mount_marks)}")
+              f"luonnonkohteita {len(features)}, symboleita " +
+              "/".join(str(len(symbol_marks[k])) for k in symbol_types))
 
     out = ("// Generoitu build_world.py:llä Natural Earth -aineistoista\n"
            "const CONTINENTS="

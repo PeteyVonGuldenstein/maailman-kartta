@@ -18,9 +18,13 @@ sisältää kaikki yksityiskohdat, joihin tämä toteutus päätyi iteroimalla.
 > aavikot) ja sekoitus. Aikahyökkäys kolmella vaikeustasolla: helppo
 > (kello alkaa 2 min 30 s:sta, oikea löytö +10 s, väärä −10 s, joka
 > 10. löytö +10 s), keskitaso (2 min, +5 s, −15 s, joka 15. löytö
-> +10 s) ja vaikea (1 min 15 s, +3 s, −20 s, joka 20. löytö +10 s);
+> +10 s) ja vaikea (1 min 40 s, +5 s, −20 s, joka 20. löytö +10 s);
 > peli päättyy, kun kaikki pelimuodon kohteet on löydetty tai aika
-> loppuu. Ennätykset maanosittain ja vaikeustasoittain localStorageen.
+> loppuu. Lisäksi haaste-moodi: 6 maanosaa satunnaisessa järjestyksessä,
+> kustakin 15 satunnaista sekoituskohdetta; lähtöaika 1 min 50 s, oikea
+> +5 s, väärä −15 s, maanosan läpäisystä +20 s, ja joka maanosan alussa
+> 5 sekunnin lähtölaskuri, jonka aikana kello ei käy. Ennätykset
+> maanosittain ja vaikeustasoittain (haasteella omansa) localStorageen.
 > Kaikki tekstit suomeksi.
 
 ## Täysi speksi
@@ -88,17 +92,36 @@ kaikki kohteet on löydetty tai aika loppuu.
   koko ajan (paitsi löytöjuhlinnan aikana). Alkuvalikossa valitaan
   vaikeustaso, joka määrää lähtöajan, hyvityksen, sakon ja putkibonuksen:
   helppo 2 min 30 s / +10 s / −10 s / +10 s joka 10. löydöstä, keskitaso
-  2 min / +5 s / −15 s / +10 s joka 15. löydöstä, vaikea 1 min 15 s /
-  +3 s / −20 s / +10 s joka 20. löydöstä. Peli päättyy, kun kaikki
-  kohteet on löydetty tai aika loppuu. Tulos = löydettyjen määrä; täydessä läpäisyssä tasatilanteen
-  ratkaisee jäljelle jäänyt aika. HUD:ssa löytölaskuri ja kello (punainen
-  alle 30 s). Ennätykset `localStorage`en avaimella
-  `maanosa:muoto:vaikeustaso`, versionumero mukana (nosto nollaa).
+  2 min / +5 s / −15 s / +10 s joka 15. löydöstä, vaikea 1 min 40 s /
+  +5 s / −20 s / +10 s joka 20. löydöstä. Peli päättyy, kun kaikki
+  kohteet on löydetty tai aika loppuu. Jokainen ajastettu peli alkaa
+  5 sekunnin lähtölaskurilla (iso numero keskellä ruutua), jonka aikana
+  kello ja ohjaus ovat pysähdyksissä; opettelussa laskuria ei ole.
+  Tulos = löydettyjen määrä; täydessä läpäisyssä tasatilanteen
+  ratkaisee jäljelle jäänyt aika. HUD:ssa löytölaskuri, kello (punainen
+  alle 30 s) ja ✕-nappi, joka lopettaa pelin kesken ilman ennätystä ja
+  palaa päävalikkoon (ainoa tapa lopettaa opettelu). Ennätykset
+  `localStorage`en avaimella `maanosa:muoto:vaikeustaso`, versionumero
+  mukana (nosto nollaa).
+- Haaste-moodi: 6 maanosaa (ei Suomea eikä USA:ta) satunnaisessa
+  järjestyksessä, kustakin 15 satunnaista kohdetta sekoituspoolista.
+  Lähtöaika 1 min 50 s, oikea +5 s, väärä −15 s, ei putkibonusta;
+  maanosan läpäisystä +20 s ja kartta vaihtuu seuraavaan maanosaan
+  (mittakaavavakiot lasketaan uudelleen, pelituntuma säilyy). Joka
+  maanosan alussa 5 s lähtölaskuri, jonka aikana kello ja ohjaus ovat
+  pysähdyksissä. Opettelu ja vaikeustaso eivät vaikuta haasteeseen.
+  Oma ennätys avaimella `haaste` (x/90, tasatilanteessa jäljellä
+  oleva aika).
 - Huti: punainen suuntanuoli ja "Ei osunut! −10 s · X on n. NNN km päässä."
   Osuma: vihreä pulssi, nimi paljastuu kartalle, maa värjäytyy vihreäksi,
   nouseva duuriääni (WebAudio).
 - Kaupunkimerkit (valkoiset pallot, ei nimiä) näkyvät kaupunkimuodoissa;
-  mailla ja luonnonkohteilla ei merkkejä.
+  mailla ei merkkejä. Luonnonkohdetyypeillä on karttasymbolit, jotka
+  generoidaan build-skriptissä polygonin sisään heksaruudukolla (kuten
+  vuorten ^-merkit): aavikot dyynikaarina (hiekankeltainen), ylängöt ja
+  tasangot vaakaviivoina (vaaleanruskea), sademetsäaltaat puusymboleina
+  (vihreä), kosteikot suomerkkeinä (sinivihreä) ja kanjonit
+  siksak-viivoina (punaruskea).
 
 ### Sisältö
 Pääkaupungit ja suurkaupungit suomalaisin nimin per maanosa (Eurooppa

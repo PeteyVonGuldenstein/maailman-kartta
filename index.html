@@ -40,6 +40,11 @@ window.addEventListener("error", function (e) {
   }
   #task b { color: #ffd94a; }
   #stats { color: #b9aefc; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  #quitbtn {
+    align-self: center; flex: 0 0 auto; padding: 2px 10px;
+    font-size: clamp(14px, 3.5vw, 18px); line-height: 1.4;
+    background: #5442b0; border: 2px solid #7869c4; border-radius: 8px;
+  }
   #mapwrap { flex: 1; position: relative; background: #79b7d8; min-height: 0; }
   svg#map { width: 100%; height: 100%; display: block; touch-action: none; }
   svg#mini {
@@ -69,6 +74,14 @@ window.addEventListener("error", function (e) {
   .lake { fill: #79b7d8; stroke: #5a9cc0; stroke-width: .6; }
   .river { fill: none; stroke: #5a9cc0; stroke-width: 1.3; stroke-linecap: round; }
   .mount { fill: none; stroke: #9c7f5a; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
+  .desert, .plateau, .forest, .wetland, .canyon {
+    fill: none; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round;
+  }
+  .desert { stroke: #c2a044; }
+  .plateau { stroke: #ab9165; }
+  .forest { stroke: #4e9350; }
+  .wetland { stroke: #55a08a; }
+  .canyon { stroke: #a35c3f; }
   .dot { fill: #fff; stroke: #444; stroke-width: 1.6; }
   .dot.found { fill: #58b24c; stroke: #2c6e26; }
   .label {
@@ -88,6 +101,14 @@ window.addEventListener("error", function (e) {
   }
   #toast.show { opacity: 1; }
   #toast b { color: #ffd94a; }
+  #count {
+    position: absolute; inset: 0; z-index: 4; pointer-events: none;
+    display: flex; align-items: center; justify-content: center;
+    font-size: clamp(80px, 25vw, 160px); font-weight: 700;
+    color: #ffd94a; text-shadow: 0 4px 24px #000;
+  }
+  #count.hidden { display: none; }
+  #challengebtn { width: 100%; margin-top: 8px; border-color: #ffd94a; }
   .overlay {
     position: absolute; inset: 0; z-index: 5;
     background: #40318d; color: #b9aefc;
@@ -131,6 +152,7 @@ window.addEventListener("error", function (e) {
 <div id="hud">
   <div id="task">Maailman kartta</div>
   <div id="stats"></div>
+  <button id="quitbtn" aria-label="Lopeta peli">✕</button>
 </div>
 <div id="mapwrap">
   <svg id="map" viewBox="0 0 1000 845" preserveAspectRatio="xMidYMid meet">
@@ -141,6 +163,11 @@ window.addEventListener("error", function (e) {
       <path id="lakes" class="lake"/>
       <path id="rivers" class="river"/>
       <path id="mounts" class="mount"/>
+      <path id="deserts" class="desert"/>
+      <path id="plateaus" class="plateau"/>
+      <path id="forests" class="forest"/>
+      <path id="wetlands" class="wetland"/>
+      <path id="canyons" class="canyon"/>
       <g id="dots"></g>
       <g id="labels"></g>
     </g>
@@ -173,6 +200,7 @@ window.addEventListener("error", function (e) {
   </svg>
   <div id="stick"><div id="knob"></div></div>
   <div id="toast"></div>
+  <div id="count" class="hidden"></div>
 </div>
 
 <div id="start" class="overlay">
@@ -196,6 +224,7 @@ window.addEventListener("error", function (e) {
       <button data-mode="luonto"><span id="lbl-luonto">Luonnonkohteet</span><span class="best" id="best-luonto"></span></button>
       <button data-mode="seka" style="grid-column:1/-1"><span id="lbl-seka">Sekoitus</span><span class="best" id="best-seka"></span></button>
     </div>
+    <button id="challengebtn">🏆 Haaste<span class="best">Kaikki maanosat putkeen, 15 kohdetta kustakin, läpäisystä +20 s. Aikaa 1:50 · +5 s / −15 s<span id="best-haaste"></span></span></button>
   </div>
 </div>
 
@@ -514,8 +543,15 @@ function makeTasks(mode, C, cities, rnd) {
 const DIFFS = {
   helppo:    { name: "Helppo",    icon: "😊", start: 150, bonus: 10, penalty: 10, streak: 10, every: 10 },
   keskitaso: { name: "Keskitaso", icon: "🙂", start: 120, bonus: 5,  penalty: 15, streak: 10, every: 15 },
-  vaikea:    { name: "Vaikea",    icon: "😈", start: 75,  bonus: 3,  penalty: 20, streak: 10, every: 20 }
+  vaikea:    { name: "Vaikea",    icon: "😈", start: 100, bonus: 5,  penalty: 20, streak: 10, every: 20 }
 };
+
+// Haaste: lähtöaika, bonus oikeasta, sakko väärästä, kohteita/maanosa,
+// maanosan läpäisybonus ja lähtölaskurin pituus (sekunteja)
+const CHALLENGE = { start: 110, bonus: 5, penalty: 15, per: 15, clear: 20, count: 5 };
+function makeChallengeTasks(C, cities, rnd) {
+  return makeTasks("seka", C, cities, rnd).slice(0, CHALLENGE.per);
+}
 
 function fmtTime(sec) {
   sec = Math.max(0, Math.ceil(sec));
@@ -578,18 +614,24 @@ if (typeof document !== "undefined") {
               VIEW: 210, SPEED: 130, ACCEL: 380, U: 1 };
   const heli = { x: 500, y: 400, vx: 0, vy: 0, heading: 0, rotor: 0 };
   const cam = { x: 500, y: 400 };
-  let state = "menu";          // menu | play | pause | end
+  let state = "menu";          // menu | play | pause | count | end
   let learn = false;           // opettelu: ei aikarajaa eikä ennätyksiä, nimet jäävät
   let diff = "keskitaso";      // vaikeustaso, ks. DIFFS
   const D = () => DIFFS[diff];
+  // Haaste: satunnaiset maanosat 15 kohteen erissä; kello käy vaikka opettelu olisi päällä
+  let challenge = false, chOrder = [], chIx = 0;
+  const CONT_CHALLENGE = ["eurooppa", "aasia", "afrikka",
+                          "pohjois_amerikka", "etela_amerikka", "oseania"];
+  const timed = () => !learn || challenge;
   let mode = "pk", tasks = [], taskIx = 0, found = 0, timeLeft = 0;
   let lastStickDown = 0, lastAttempt = 0, clockStr = "";
   let flightTarget = null;
   let pointerHeld = false;
   const keys = new Set();
-  let toastTimer = 0, hintTimer = 0;
+  let toastTimer = 0, hintTimer = 0, countTimer = 0;
 
-  function setContinent(key) {
+  // transient: haasteen karttavaihto ei muuta valikon aluevalintaa
+  function setContinent(key, transient) {
     contKey = key;
     C = CONTINENTS[key];
     cities = CITY_DATA[key];
@@ -606,7 +648,7 @@ if (typeof document !== "undefined") {
     K.SPEED = 650 * sc / kmpx;   // huippunopeus 650 km/s × kk
     K.ACCEL = 1900 * sc / kmpx;
     K.U = K.VIEW / 210;     // ui-mittakaava: grafiikan näyttökoko sama joka maanosassa
-    saved.cont = key; save();
+    if (!transient) { saved.cont = key; save(); }
     drawMap();
   }
 
@@ -620,8 +662,10 @@ if (typeof document !== "undefined") {
     $("lakes").style.strokeWidth = (0.6 * K.U).toFixed(2);
     $("rivers").setAttribute("d", C.rivers);
     $("rivers").style.strokeWidth = (1.3 * K.U).toFixed(2);
-    $("mounts").setAttribute("d", C.mounts);
-    $("mounts").style.strokeWidth = (1.2 * K.U).toFixed(2);
+    for (const id of ["mounts", "deserts", "plateaus", "forests", "wetlands", "canyons"]) {
+      $(id).setAttribute("d", C[id] || "");
+      $(id).style.strokeWidth = (1.2 * K.U).toFixed(2);
+    }
     $("dots").innerHTML = "";
     $("labels").innerHTML = "";
     const mini = $("mini");
@@ -642,9 +686,10 @@ if (typeof document !== "undefined") {
       const [x, y] = project(c[2], c[1], C);
       list.push({ name: c[0], x, y });
     };
-    if (mode === "pk" || mode === "seka") cities.pk.forEach(add);
-    if (mode === "kau" || mode === "seka") cities.kau.forEach(add);
-    if ((mode === "opk" || mode === "seka") && cities.opk) cities.opk.forEach(add);
+    const m = challenge ? "seka" : mode;   // haasteen kohteet arvotaan sekoituspoolista
+    if (m === "pk" || m === "seka") cities.pk.forEach(add);
+    if (m === "kau" || m === "seka") cities.kau.forEach(add);
+    if ((m === "opk" || m === "seka") && cities.opk) cities.opk.forEach(add);
     return list;
   }
 
@@ -675,11 +720,12 @@ if (typeof document !== "undefined") {
 
   function updateClock(force) {
     if (!tasks.length || state === "menu") { $("stats").textContent = ""; return; }
-    const str = found + "/" + tasks.length + (learn ? " · 🎓" : " · " + fmtTime(timeLeft));
+    const total = challenge ? CHALLENGE.per * chOrder.length : tasks.length;
+    const str = found + "/" + total + (timed() ? " · " + fmtTime(timeLeft) : " · 🎓");
     if (force || str !== clockStr) {
       clockStr = str;
       $("stats").textContent = str;
-      $("stats").style.color = !learn && timeLeft <= 30 ? "#ff9d8f" : "";
+      $("stats").style.color = timed() && timeLeft <= 30 ? "#ff9d8f" : "";
     }
   }
 
@@ -694,9 +740,13 @@ if (typeof document !== "undefined") {
     for (const m of Object.keys(MODE_NAMES)) {
       $("best-" + m).textContent = bestText(saved.best[contKey + ":" + m + ":" + diff]);
     }
+    // haasteen ennätys ei riipu alueesta eikä vaikeustasosta
+    const hb = saved.best.haaste;
+    $("best-haaste").textContent = hb ? " · " + bestText(hb) : "";
   }
 
   function startGame(m) {
+    challenge = false;
     mode = m;
     tasks = makeTasks(mode, C, cities);
     taskIx = 0; found = 0; timeLeft = D().start;
@@ -706,7 +756,55 @@ if (typeof document !== "undefined") {
     heli.x = C.W / 2; heli.y = C.H / 2; heli.vx = heli.vy = 0;
     cam.x = heli.x; cam.y = heli.y;
     flightTarget = null;
-    beginTask();
+    // lähtölaskuri kaikissa pisteitä laskevissa peleissä; opettelussa suoraan matkaan
+    if (timed()) startCountdown();
+    else beginTask();
+  }
+
+  function startChallenge() {
+    challenge = true;
+    chOrder = shuffle(CONT_CHALLENGE, Math.random);
+    chIx = 0; found = 0; timeLeft = CHALLENGE.start;
+    $("start").classList.add("hidden");
+    $("end").classList.add("hidden");
+    beginContinent();
+  }
+
+  function beginContinent() {
+    setContinent(chOrder[chIx], true);
+    tasks = makeChallengeTasks(C, cities);
+    taskIx = 0;
+    drawDots();
+    heli.x = C.W / 2; heli.y = C.H / 2; heli.vx = heli.vy = 0;
+    cam.x = heli.x; cam.y = heli.y;
+    flightTarget = null;
+    toast("<b>" + C.name + "</b> · maanosa " + (chIx + 1) + "/" + chOrder.length, 2500);
+    startCountdown();
+  }
+
+  // Lähtölaskuri: kello ja ohjaus pysähdyksissä, kunnes laskuri on ohi
+  function startCountdown() {
+    state = "count";
+    $("task").innerHTML = "Valmistaudu: <b>" + C.name + "</b>";
+    updateClock(true);
+    let n = CHALLENGE.count;
+    const el = $("count");
+    el.textContent = n;
+    el.classList.remove("hidden");
+    beep(440, 0.12, 0);
+    clearInterval(countTimer);
+    countTimer = setInterval(() => {
+      n--;
+      if (n > 0) {
+        el.textContent = n;
+        beep(440, 0.12, 0);
+      } else {
+        clearInterval(countTimer);
+        el.classList.add("hidden");
+        beep(880, 0.3, 0);
+        beginTask();
+      }
+    }, 1000);
   }
 
   function beginTask() {
@@ -772,7 +870,8 @@ if (typeof document !== "undefined") {
 
     if (hit) {
       found++;
-      if (!learn) timeLeft += D().bonus;
+      const bonus = challenge ? CHALLENGE.bonus : D().bonus;
+      if (timed()) timeLeft += bonus;
       state = "pause";   // kello ei käy juhlinnan aikana
       if (t.kind === "city") {
         const dot = document.querySelector(`.dot[data-name="${t.name}"]`);
@@ -784,50 +883,66 @@ if (typeof document !== "undefined") {
         $("c" + t.ci).classList.add("found");
         pulseAt(heli.x, heli.y);
       } else pulseAt(heli.x, heli.y);
-      if (found % D().every === 0) {
+      if (!challenge && found % D().every === 0) {
         if (!learn) timeLeft += D().streak;
         toast(learn ? "Löytyi! Jo <b>" + found + "</b> löytöä!"
                     : "Löytyi! <b>+" + D().bonus + " s</b> · " + found +
                       " löytöä: bonus <b>+" + D().streak + " s</b>!", 1600);
         beep(523, 0.1, 0); beep(659, 0.1, 0.1); beep(784, 0.1, 0.2); beep(1047, 0.25, 0.3);
       } else {
-        toast(learn ? "Löytyi!" : "Löytyi! <b>+" + D().bonus + " s</b>", 1200);
+        toast(timed() ? "Löytyi! <b>+" + bonus + " s</b>" : "Löytyi!", 1200);
         beep(523, 0.12, 0); beep(784, 0.22, 0.12);
       }
       hud();
       setTimeout(nextTask, 1200);
     } else {
-      if (!learn) timeLeft -= D().penalty;
+      const penalty = challenge ? CHALLENGE.penalty : D().penalty;
+      if (timed()) timeLeft -= penalty;
       const km = distKm(heli.x, heli.y, t.x, t.y, kmpx);
-      toast("Ei osunut!" + (learn ? "" : " <b>−" + D().penalty + " s</b> ·") +
+      toast("Ei osunut!" + (timed() ? " <b>−" + penalty + " s</b> ·" : "") +
         " " + t.name + " on n. " + km + " km päässä.", 2200);
       showHint(t);
       beep(180, 0.28, 0, "sawtooth");
       updateClock(true);
-      if (!learn && timeLeft <= 0) endGame(false);
+      if (timed() && timeLeft <= 0) endGame(false);
     }
   }
 
   function nextTask() {
+    if (state === "menu") return;   // peli lopetettiin kesken juhlinnan
     taskIx++;
-    if (taskIx >= tasks.length) return endGame(true);
-    beginTask();
+    if (taskIx < tasks.length) return beginTask();
+    // haasteessa läpäisty maanosa antaa lisäaikaa ja arvottu jono jatkuu
+    if (challenge && chIx < chOrder.length - 1) {
+      chIx++;
+      timeLeft += CHALLENGE.clear;
+      toast("Maanosa valmis! <b>+" + CHALLENGE.clear + " s</b>", 2200);
+      beep(392, 0.15, 0); beep(523, 0.15, 0.15); beep(659, 0.3, 0.3);
+      beginContinent();
+      return;
+    }
+    endGame(true);
   }
 
   function endGame(cleared) {
     state = "end";
-    const bkey = contKey + ":" + mode + ":" + diff;
-    const result = { f: found, t: cleared ? Math.ceil(timeLeft) : 0, n: tasks.length };
-    const record = !learn && betterResult(result, saved.best[bkey]);
+    const bkey = challenge ? "haaste" : contKey + ":" + mode + ":" + diff;
+    const total = challenge ? CHALLENGE.per * chOrder.length : tasks.length;
+    const result = { f: found, t: cleared ? Math.ceil(timeLeft) : 0, n: total };
+    const record = timed() && betterResult(result, saved.best[bkey]);
     if (record) { saved.best[bkey] = result; save(); }
-    $("end").querySelector("h2").textContent = cleared ? "Kaikki löydetty!" : "Aika loppui!";
+    $("end").querySelector("h2").textContent =
+      challenge && cleared ? "Kaikki maanosat läpi!" : cleared ? "Kaikki löydetty!" : "Aika loppui!";
     $("end").querySelector(".copter").textContent = cleared ? "🏆" : "⏰";
-    $("endscore").textContent = C.name + " · " + modeName(mode) +
-      (learn ? " · opettelu" : " · " + D().name.toLowerCase()) + " — löysit " + found + "/" + tasks.length +
-      (cleared && !learn ? " ja aikaa jäi " + fmtTime(timeLeft) : "");
+    $("endscore").textContent = (challenge
+      ? "Haaste · " + (chIx + 1) + "/" + chOrder.length + " maanosaa"
+      : C.name + " · " + modeName(mode) +
+        (learn ? " · opettelu" : " · " + D().name.toLowerCase())) +
+      " — löysit " + found + "/" + total +
+      (cleared && timed() ? " ja aikaa jäi " + fmtTime(timeLeft) : "");
     $("endbest").innerHTML = record
       ? '<span class="record">Uusi ennätys!</span>'
-      : learn ? "Opettelussa ennätyksiä ei tallenneta."
+      : !timed() ? "Opettelussa ennätyksiä ei tallenneta."
       : bestText(saved.best[bkey]).replace("Paras:", "Paras tuloksesi:");
     $("end").classList.remove("hidden");
     showBests();
@@ -955,14 +1070,27 @@ if (typeof document !== "undefined") {
   setLearn(!!saved.learn);
   document.querySelectorAll("#start .modes button").forEach(b =>
     b.addEventListener("click", () => startGame(b.dataset.mode)));
-  $("again").addEventListener("click", () => startGame(mode));
-  $("tomenu").addEventListener("click", () => {
+  $("again").addEventListener("click", () => challenge ? startChallenge() : startGame(mode));
+  $("challengebtn").addEventListener("click", startChallenge);
+  // Paluu päävalikkoon loppunäytöstä tai kesken pelin (✕): ei ennätystä,
+  // ja mahdollinen lähtölaskuri perutaan
+  function toMenu() {
+    clearInterval(countTimer);
+    $("count").classList.add("hidden");
     $("end").classList.add("hidden");
     $("start").classList.remove("hidden");
     state = "menu";
+    tasks = []; taskIx = 0;
+    if (challenge) {
+      // palauta valikon aluevalinta haasteen jäljiltä
+      challenge = false;
+      selectContinent(CONTINENTS[saved.cont] ? saved.cont : "eurooppa");
+    }
     hud();
     showBests();
-  });
+  }
+  $("tomenu").addEventListener("click", toMenu);
+  $("quitbtn").addEventListener("click", toMenu);
 
   // Pelisilmukka
   let prev = performance.now();
@@ -1003,8 +1131,8 @@ if (typeof document !== "undefined") {
       if (speed > K.SPEED * 0.1) heli.heading = Math.atan2(heli.vy, heli.vx) * 180 / Math.PI;
       heli.rotor = (heli.rotor + (120 + speed * 2) * dt * 6) % 360;
 
-      // kello käy vain pelin aikana (ei löytöjuhlinnan eikä opettelussa)
-      if (state === "play" && !learn) {
+      // kello käy vain pelin aikana (ei löytöjuhlinnan, lähtölaskurin eikä opettelun aikana)
+      if (state === "play" && timed()) {
         timeLeft -= dt;
         if (timeLeft <= 0) { timeLeft = 0; endGame(false); }
         else updateClock();

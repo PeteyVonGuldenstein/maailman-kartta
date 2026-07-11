@@ -150,7 +150,20 @@ assert.deepStrictEqual([DIFFS.helppo.start, DIFFS.helppo.bonus, DIFFS.helppo.pen
 assert.deepStrictEqual([DIFFS.keskitaso.start, DIFFS.keskitaso.bonus, DIFFS.keskitaso.penalty, DIFFS.keskitaso.streak, DIFFS.keskitaso.every],
   [120, 5, 15, 10, 15], "keskitaso: 2 min, +5/−15 s, putki +10 s joka 15.");
 assert.deepStrictEqual([DIFFS.vaikea.start, DIFFS.vaikea.bonus, DIFFS.vaikea.penalty, DIFFS.vaikea.streak, DIFFS.vaikea.every],
-  [75, 3, 20, 10, 20], "vaikea: 1 min 15 s, +3/−20 s, putki +10 s joka 20.");
+  [100, 5, 20, 10, 20], "vaikea: 1 min 40 s, +5/−20 s, putki +10 s joka 20.");
+// Haaste
+assert.deepStrictEqual(CHALLENGE, { start: 110, bonus: 5, penalty: 15, per: 15, clear: 20, count: 5 },
+  "haasteen säännöt: 1:50, +5/−15 s, 15 kohdetta/maanosa, läpäisystä +20 s, 5 s laskuri");
+for (const key of ["eurooppa", "aasia", "afrikka", "pohjois_amerikka", "etela_amerikka", "oseania"]) {
+  const C = CONTINENTS[key];
+  const t = makeChallengeTasks(C, CITY_DATA[key], rnd);
+  assert.strictEqual(t.length, CHALLENGE.per, key + ": haasteessa 15 kohdetta");
+  assert.strictEqual(new Set(t.map(x => x.kind + ":" + x.name)).size, t.length, key + ": ei toistoja haasteessa");
+  for (const task of t)
+    assert(task.x >= 0 && task.x <= C.W && task.y >= 0 && task.y <= C.H,
+      key + ": haastekohde kartalla: " + task.name);
+}
+
 assert.strictEqual(fmtTime(150), "2:30", "ajan muotoilu");
 assert.strictEqual(fmtTime(65), "1:05", "ajan muotoilu, etunolla");
 assert.strictEqual(fmtTime(-3), "0:00", "ei negatiivista aikaa");
