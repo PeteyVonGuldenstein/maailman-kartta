@@ -15,6 +15,14 @@ Hakemistossa on oltava:
   ne_50m_rivers_lake_centerlines.geojson
   ne_50m_geography_marine_polys.geojson
   ne_50m_geography_regions_polys.geojson
+  kunnat_2026.geojson                       (Tilastokeskus, kunta1000k_2026)
+  maakunnat_2026.geojson                    (Tilastokeskus, maakunta1000k_2026)
+
+Kunta- ja maakuntarajat: Tilastokeskus, kuntapohjaiset tilastointialueet
+2026 (CC BY 4.0). Haku (maakunnat samoin, typename=...maakunta1000k_2026):
+  curl "https://geo.stat.fi/geoserver/tilastointialueet/wfs?service=WFS\
+&version=2.0.0&request=GetFeature&typename=tilastointialueet:kunta1000k_2026\
+&outputFormat=application/json&srsName=EPSG:4326" -o kunnat_2026.geojson
 """
 import json
 import math
@@ -509,7 +517,7 @@ def ring_area_centroid(ring):
     return abs(a), cx / (6 * a), cy / (6 * a)
 
 
-def geom_rings(geom, project, w, h):
+def geom_rings(geom, project, w, h, tol=SIMPLIFY_TOL):
     """Geometrian ulkorenkaat projisoituna, leikattuna ja yksinkertaistettuna."""
     if geom["type"] == "Polygon":
         raw = [geom["coordinates"][0]]
@@ -523,7 +531,7 @@ def geom_rings(geom, project, w, h):
         pts = clip_ring(pts, w, h)
         if not pts:
             continue
-        pts = simplify(pts, SIMPLIFY_TOL)
+        pts = simplify(pts, tol)
         if len(pts) < 3:
             continue
         xs = [p[0] for p in pts]
@@ -552,16 +560,17 @@ def geom_lines(geom, project, w, h):
     return lines
 
 
-def path_d(rings, close=True):
+def path_d(rings, close=True, dec=1):
     parts = []
     for ring in rings:
-        parts.append("M" + " ".join(f"{x:.1f} {y:.1f}" for x, y in ring)
+        parts.append("M" + " ".join(f"{x:.{dec}f} {y:.{dec}f}" for x, y in ring)
                      + ("Z" if close else ""))
     return "".join(parts)
 
 
-def flat(rings):
-    return [[round(v, 1) for pt in r for v in pt] for r in rings]
+def flat(rings, dec=1):
+    return [[round(v, dec) if dec else round(v) for pt in r for v in pt]
+            for r in rings]
 
 
 def rings_centroid(rings):
@@ -836,6 +845,105 @@ def main():
               f"taustaa {len(bg)}, järvirenkaita {len(lake_rings)}, "
               f"luonnonkohteita {len(features)}, symboleita " +
               "/".join(str(len(symbol_marks[k])) for k in symbol_types))
+
+    # ------------------------------------------- Suomen maakunnat ja kunnat
+    # Manner-Suomen 18 maakuntaa omina karttoinaan; kunnat kohteina samassa
+    # muodossa kuin maat, jolloin pelin maa-koneisto toimii sellaisenaan.
+    kunnat_geo = load("kunnat_2026.geojson")
+    maakunnat_geo = load("maakunnat_2026.geojson")
+
+    def outer_rings_lonlat(geom):
+        if geom["type"] == "Polygon":
+            return [geom["coordinates"][0]]
+        if geom["type"] == "MultiPolygon":
+            return [poly[0] for poly in geom["coordinates"]]
+        return []
+
+    def lonlat_centroid(geom):
+        best = max(outer_rings_lonlat(geom),
+                   key=lambda r: ring_area_centroid(r)[0])
+        _, cx, cy = ring_area_centroid(best)
+        return cx, cy
+
+    def slug(name):
+        s = name.lower()
+        for a, b in (("ä", "a"), ("ö", "o"), ("å", "a"), ("-", "_"), (" ", "_")):
+            s = s.replace(a, b)
+        return s
+
+    # kunta kuuluu siihen maakuntaan, jonka sisällä sen keskipiste on;
+    # Ahvenanmaan 16 kuntaa jätetään pois (pelissä vain Manner-Suomi)
+    mk_feats = [f for f in maakunnat_geo["features"]
+                if f["properties"]["nimi"] != "Ahvenanmaa"]
+    mk_kunnat = {f["properties"]["nimi"]: [] for f in mk_feats}
+    for kf in kunnat_geo["features"]:
+        cx, cy = lonlat_centroid(kf["geometry"])
+        for mf in maakunnat_geo["features"]:
+            if any(point_in_ring(cx, cy, r)
+                   for r in outer_rings_lonlat(mf["geometry"])):
+                mk_kunnat.get(mf["properties"]["nimi"], []).append(kf)
+                break
+        else:
+            print(f"!! kunta ilman maakuntaa: {kf['properties']['nimi']}")
+
+    for mf in sorted(mk_feats, key=lambda f: f["properties"]["nimi"]):
+        mk_nimi = mf["properties"]["nimi"]
+        rings_ll = outer_rings_lonlat(mf["geometry"])
+        lons = [p[0] for r in rings_ll for p in r]
+        lats = [p[1] for r in rings_ll for p in r]
+        mrg_lon = (max(lons) - min(lons)) * 0.08
+        mrg_lat = (max(lats) - min(lats)) * 0.08
+        bbox = (round(min(lons) - mrg_lon, 4), round(max(lons) + mrg_lon, 4),
+                round(min(lats) - mrg_lat, 4), round(max(lats) + mrg_lat, 4))
+        reflat = (bbox[2] + bbox[3]) / 2
+        project, W, H, cos = make_projection(bbox, reflat)
+
+        targets = []
+        for kf in mk_kunnat[mk_nimi]:
+            # kuntarajoille väljempi yksinkertaistus ja kokonaislukukoordi-
+            # naatit, ettei datatiedosto paisu (292 kuntaa lähizoomilla)
+            rings = geom_rings(kf["geometry"], project, W, H, tol=2.0)
+            if not rings:
+                print(f"!! {mk_nimi}: kunta ei mahtunut kartalle: "
+                      f"{kf['properties']['nimi']}")
+                continue
+            targets.append({"n": kf["properties"]["nimi"],
+                            "c": rings_centroid(rings),
+                            "d": path_d(rings, dec=0), "p": flat(rings, dec=0)})
+        targets.sort(key=lambda t: t["n"])
+
+        bg = []
+        for feat in countries_geo["features"]:
+            admin = feat["properties"].get("ADMIN")
+            if admin in ALWAYS_EXCLUDE:
+                continue
+            geom = overrides.get(admin, feat["geometry"])
+            rings = geom_rings(geom, project, W, H)
+            if rings:
+                bg.append(path_d(rings))
+
+        lake_rings = []
+        for feat in lakes_geo["features"]:
+            for ring in geom_rings(feat["geometry"], project, W, H):
+                if ring_area_centroid(ring)[0] >= LAKE_MIN_AREA:
+                    lake_rings.append(ring)
+
+        # joet vain koristeeksi (ei kohteita)
+        river_draw = []
+        for feat in rivers_geo["features"]:
+            river_draw.extend(geom_lines(feat["geometry"], project, W, H))
+
+        world["mk_" + slug(mk_nimi)] = {
+            "name": mk_nimi, "mk": 1, "W": W, "H": H,
+            "lon0": bbox[0], "lon1": bbox[1], "lat0": bbox[2], "lat1": bbox[3],
+            "cos": round(cos, 6),
+            "countries": targets, "bg": "".join(bg),
+            "lakes": path_d(lake_rings),
+            "rivers": path_d(river_draw, close=False),
+            "features": [],
+        }
+        print(f"{mk_nimi}: {W:.0f}x{H}, kuntia {len(targets)}, "
+              f"järvirenkaita {len(lake_rings)}, jokipätkiä {len(river_draw)}")
 
     out = ("// Generoitu build_world.py:llä Natural Earth -aineistoista\n"
            "const CONTINENTS="

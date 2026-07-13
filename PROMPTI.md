@@ -23,9 +23,12 @@ sisältää kaikki yksityiskohdat, joihin tämä toteutus päätyi iteroimalla.
 > loppuu. Lisäksi haaste-moodi: 6 maanosaa satunnaisessa järjestyksessä,
 > kustakin 15 satunnaista sekoituskohdetta; lähtöaika 1 min 50 s, oikea
 > +5 s, väärä −15 s, maanosan läpäisystä +20 s, ja joka maanosan alussa
-> 5 sekunnin lähtölaskuri, jonka aikana kello ei käy. Ennätykset
-> maanosittain ja vaikeustasoittain (haasteella omansa) localStorageen.
-> Kaikki tekstit suomeksi.
+> 5 sekunnin lähtölaskuri, jonka aikana kello ei käy. Lisäksi Suomen
+> kuntien etsintä: aluevalikon Maakunnat-napista avautuu Manner-Suomen
+> 18 maakuntaa, kukin omana zoomattuna karttanaan, jolta etsitään sen
+> kunnat (rajat Tilastokeskuksen avoimesta rajapinnasta, CC BY 4.0).
+> Ennätykset maanosittain/maakunnittain ja vaikeustasoittain (haasteella
+> omansa) localStorageen. Kaikki tekstit suomeksi.
 
 ## Täysi speksi
 
@@ -34,7 +37,9 @@ Pelaaja valitsee maanosan (Eurooppa, Aasia, Afrikka, Pohjois-Amerikka,
 Etelä-Amerikka, Oseania) ja pelimuodon, lentää helikopterilla kartalla ja
 etsii pyydetyn kohteen: "Etsi kaupunki: Pariisi", "Etsi maa: Portugali"
 tai "Etsi: Sahara". Kierros jatkuu kelloa vastaan, kunnes pelimuodon
-kaikki kohteet on löydetty tai aika loppuu.
+kaikki kohteet on löydetty tai aika loppuu. Alueeksi voi valita myös
+Manner-Suomen maakunnan (aluevalikon Maakunnat-alavalikko), jolloin
+ainoana pelimuotona etsitään maakunnan kuntia ("Etsi kunta: Iitti").
 
 ### Tekniikka
 - Yksi HTML-sivu + generoitu `world_data.js` (kehitys); jakeluversiossa
@@ -63,6 +68,14 @@ kaikki kohteet on löydetty tai aika loppuu.
   Afrikka 37, P-Am 13, E-Am 12, Oseania 7); muut maat taustaväriin,
   Antarktis pois, Grönlanti mukana vain P-Amerikassa (kohteena).
 - Isot järvet piirretään merenvärisinä, kohdejoet ohuina sinisinä viivoina.
+- Manner-Suomen 18 maakuntaa omina karttoinaan (avaimet `mk_*`): kunta- ja
+  maakuntarajat Tilastokeskuksen WFS-rajapinnasta (geo.stat.fi,
+  kunta1000k_2026 ja maakunta1000k_2026, CC BY 4.0). Kunta kuuluu siihen
+  maakuntaan, jonka sisällä sen keskipiste on; Ahvenanmaa jätetään pois
+  (jäljelle jää 292 kuntaa, 6–30 per maakunta). Bbox = maakunnan rajat
+  + 8 % marginaali, kunnat maiden muodossa (`countries`), kuntarajoille
+  väljempi yksinkertaistus (2 px) ja kokonaislukukoordinaatit, ettei
+  datatiedosto paisu. Taustalle Suomen ääriviiva, järvet ja joet.
 - Luonnonkohteet (10–25/maanosa): meripolygonit (Itämeri, Meksikonlahti,
   Korallimeri…), järvet (Baikal, Viktorianjärvi, Titicaca…), aluepolygonit
   (Sahara, Himalaja, Andit, Alpit, Tasmania…) ja joet keskilinjoina
@@ -103,6 +116,12 @@ kaikki kohteet on löydetty tai aika loppuu.
   palaa päävalikkoon (ainoa tapa lopettaa opettelu). Ennätykset
   `localStorage`en avaimella `maanosa:muoto:vaikeustaso`, versionumero
   mukana (nosto nollaa).
+- Maakunnissa kokokerroin on 1,5-kertainen, jolloin näkymä on selvästi
+  kauempana kuin maanosissa (nopeus, merkit ja toleranssit samassa
+  suhteessa).
+- Maakunnissa ainoa pelimuoto on Kunnat (maa-koneisto kuntapolygoneilla):
+  löydetty kunta värjäytyy vihreäksi ja nimi jää kartalle. Ennätykset
+  avaimin `mk_maakunta:maa:vaikeustaso`. Maakunnat eivät ole haasteessa.
 - Haaste-moodi: 6 maanosaa (ei Suomea eikä USA:ta) satunnaisessa
   järjestyksessä, kustakin 15 satunnaista kohdetta sekoituspoolista.
   Lähtöaika 1 min 50 s, oikea +5 s, väärä −15 s, ei putkibonusta;

@@ -138,6 +138,9 @@ window.addEventListener("error", function (e) {
   button:active { background: #6a55d6; }
   .conts button { font-size: 13.5px; padding: 9px 4px; }
   .conts button.sel { background: #2e9e44; border-color: #7fd992; }
+  #mkbtns { border: 1px solid #7869c4; border-radius: 10px; padding: 6px; margin-top: 8px; }
+  #mkbtns.hidden { display: none; }
+  #mkbtns button { font-size: 12.5px; }
   #learnbtn { width: 100%; margin-top: 4px; }
   #learnbtn.sel { background: #2e9e44; border-color: #7fd992; }
   .diffs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; width: 100%; margin-top: 4px; }
@@ -212,6 +215,7 @@ window.addEventListener("error", function (e) {
     <p id="jswarn" style="color:#ffc4b8;font-weight:600">⚠️ Pelin koodi ei ole käynnistynyt, koska tämä katselin ei suorita JavaScriptiä. Avaa tiedosto Chromella: Chrome-valikko ⋮ → Lataukset. Sovellusten esikatselu ja HTML-katselin eivät kelpaa.</p>
     <p>Valitse alue:</p>
     <div class="conts" id="contbtns"></div>
+    <div class="conts hidden" id="mkbtns"></div>
     <p>Valitse vaikeustaso:</p>
     <div class="diffs" id="diffbtns"></div>
     <button id="learnbtn">🎓 Opettelu<span class="best">Ei aikarajaa, ennätyksiä ei tallenneta ja löydettyjen nimet jäävät kartalle</span></button>
@@ -514,6 +518,7 @@ function shuffle(arr, rnd) {
 // Arpoo kierroksen 10 tehtävää maanosan ja pelimuodon mukaan
 function makeTasks(mode, C, cities, rnd) {
   rnd = rnd || Math.random;
+  cities = cities || { pk: [], kau: [] };   // maakunnilla ei ole kaupunkilistoja
   const cityTask = c => {
     const [x, y] = project(c[2], c[1], C);
     return { kind: "city", name: c[0], x, y };
@@ -577,6 +582,7 @@ if (typeof document !== "undefined") {
     usa: { pk: "Suurkaupungit", kau: "Muut kaupungit", maa: "Osavaltiot" }
   };
   function modeName(m) {
+    if (C && C.mk && m === "maa") return "Kunnat";   // maakunnissa etsitään kuntia
     return (MODE_OVERRIDES[contKey] || {})[m] || MODE_NAMES[m];
   }
   const CONT_ORDER = ["suomi", "eurooppa", "aasia", "afrikka",
@@ -634,11 +640,13 @@ if (typeof document !== "undefined") {
   function setContinent(key, transient) {
     contKey = key;
     C = CONTINENTS[key];
-    cities = CITY_DATA[key];
+    cities = CITY_DATA[key] || { pk: [], kau: [] };
     kmpx = kmPerPx(C);
     // km-arvot on viritetty Euroopalle; muilla mantereilla ne kerrotaan
-    // kokokertoimella, jolloin pelituntuma on sama mantereen koosta riippumatta
-    const sc = sizeScale(C, CONTINENTS.eurooppa);
+    // kokokertoimella, jolloin pelituntuma on sama mantereen koosta riippumatta.
+    // Maakunnissa kerroin on 1,5-kertainen, jolloin näkymä on selvästi kauempana
+    // (ja nopeus, merkit ja toleranssit skaalautuvat samassa suhteessa).
+    const sc = sizeScale(C, CONTINENTS.eurooppa) * (C.mk ? 1.5 : 1);
     K.HIT = 85 * sc / kmpx;      // kaupunkiosuma 85 km × kokokerroin
     K.SNAP = 110 * sc / kmpx;    // kosketuksen tarttuminen merkkiin 110 km × kk
     K.LINE = 50 * sc / kmpx;     // jokiosuma 50 km × kk
@@ -714,6 +722,7 @@ if (typeof document !== "undefined") {
     const t = tasks[taskIx];
     const pre = { city: "Etsi kaupunki: ", country: "Etsi maa: ", feature: "Etsi: " };
     if (contKey === "usa") pre.country = "Etsi osavaltio: ";
+    if (C.mk) pre.country = "Etsi kunta: ";
     $("task").innerHTML = t ? pre[t.kind] + "<b>" + t.name + "</b>" : "Maailman kartta";
     updateClock(true);
   }
@@ -1030,23 +1039,41 @@ if (typeof document !== "undefined") {
   stickEl.addEventListener("pointercancel", stickEnd);
   stickEl.addEventListener("contextmenu", e => e.preventDefault());
 
-  // Valikot
-  $("contbtns").innerHTML = CONT_ORDER.map(k =>
+  // Valikot: alueet, Maakunnat-nappi Suomen viereen ja maakuntapaneeli
+  const contHtml = CONT_ORDER.map(k =>
+    `<button data-cont="${k}">${CONTINENTS[k].name}</button>`);
+  contHtml.splice(1, 0, `<button id="mktoggle">Maakunnat ▾<span class="best" id="mksel"></span></button>`);
+  $("contbtns").innerHTML = contHtml.join("");
+  const mkKeys = Object.keys(CONTINENTS).filter(k => CONTINENTS[k].mk);
+  $("mkbtns").innerHTML = mkKeys.map(k =>
     `<button data-cont="${k}">${CONTINENTS[k].name}</button>`).join("");
-  const contBtns = document.querySelectorAll("#contbtns button");
+  const contBtns = document.querySelectorAll("#contbtns button[data-cont]");
+  const mkBtns = document.querySelectorAll("#mkbtns button");
   function selectContinent(key) {
     setContinent(key);
+    const mk = !!C.mk;
     contBtns.forEach(b => b.classList.toggle("sel", b.dataset.cont === key));
-    // pelimuotojen nimet alueen mukaan; Maat piiloon, jos kohdemaita on vain yksi,
-    // ja osavaltioiden pääkaupungit näkyviin vain, jos alueella on opk-lista
+    mkBtns.forEach(b => b.classList.toggle("sel", b.dataset.cont === key));
+    $("mktoggle").classList.toggle("sel", mk);
+    $("mksel").textContent = mk ? C.name : "";
+    // paneeli auki maakuntaa valittaessa, kiinni tavallisen alueen valinnasta
+    $("mkbtns").classList.toggle("hidden", !mk);
+    // pelimuotojen nimet alueen mukaan; maakunnissa vain Kunnat, muuten Maat
+    // piiloon jos kohdemaita on vain yksi ja osavaltioiden pääkaupungit
+    // näkyviin vain, jos alueella on opk-lista
     for (const m of Object.keys(MODE_NAMES)) $("lbl-" + m).textContent = modeName(m);
-    document.querySelector('#start .modes button[data-mode="maa"]').style.display =
-      C.countries.length >= 2 ? "" : "none";
-    document.querySelector('#start .modes button[data-mode="opk"]').style.display =
-      cities.opk ? "" : "none";
+    const show = { pk: !mk, kau: !mk, opk: !mk && !!cities.opk,
+                   maa: C.countries.length >= 2, luonto: !mk, seka: !mk };
+    for (const m of Object.keys(show)) {
+      const b = document.querySelector(`#start .modes button[data-mode="${m}"]`);
+      b.style.display = show[m] ? "" : "none";
+      if (m === "maa") b.style.gridColumn = mk ? "1 / -1" : "";
+    }
     showBests();
   }
   contBtns.forEach(b => b.addEventListener("click", () => selectContinent(b.dataset.cont)));
+  mkBtns.forEach(b => b.addEventListener("click", () => selectContinent(b.dataset.cont)));
+  $("mktoggle").addEventListener("click", () => $("mkbtns").classList.toggle("hidden"));
   $("diffbtns").innerHTML = Object.keys(DIFFS).map(k => {
     const d = DIFFS[k];
     return `<button data-diff="${k}">${d.icon} ${d.name}<span class="best">` +

@@ -164,6 +164,48 @@ for (const key of ["eurooppa", "aasia", "afrikka", "pohjois_amerikka", "etela_am
       key + ": haastekohde kartalla: " + task.name);
 }
 
+// Suomen maakunnat: 18 karttaa, kunnat kohteina kuten maat
+const MK = Object.keys(CONTINENTS).filter(k => k.startsWith("mk_"));
+assert.strictEqual(MK.length, 18, "18 maakuntaa");
+let kunnat = 0;
+const perMk = {};
+for (const key of MK) {
+  const C = CONTINENTS[key];
+  assert(C.mk, key + ": mk-lippu");
+  assert(!CITY_DATA[key], key + ": ei kaupunkilistoja");
+  assert(C.countries.length >= 6, key + ": vähintään 6 kuntaa");
+  assert.strictEqual(C.features.length, 0, key + ": ei luonnonkohteita");
+  kunnat += C.countries.length;
+  perMk[C.name] = C.countries.length;
+  const names = C.countries.map(c => c.n);
+  assert.strictEqual(new Set(names).size, names.length, key + ": kuntanimet uniikkeja");
+  assert(!names.some(n => n.includes("Mariehamn")), key + ": Ahvenanmaa ei mukana");
+  // kuntatehtävät: koko kuntalista, kaikki kartalla
+  const t = makeTasks("maa", C, CITY_DATA[key], rnd);
+  assert.strictEqual(t.length, C.countries.length, key + ": kaikki kunnat tehtävinä");
+  for (const task of t) {
+    assert.strictEqual(task.kind, "country", key + ": kuntatehtävä on aluekohde");
+    assert(task.x >= 0 && task.x <= C.W && task.y >= 0 && task.y <= C.H,
+      key + ": kunta kartalla: " + task.name);
+  }
+}
+assert.strictEqual(kunnat, 292, "Manner-Suomessa 292 kuntaa");
+assert.strictEqual(perMk["Uusimaa"], 26, "Uudellamaalla 26 kuntaa");
+assert.strictEqual(perMk["Kymenlaakso"], 6, "Kymenlaaksossa 6 kuntaa");
+assert.strictEqual(perMk["Pohjois-Pohjanmaa"], 30, "Pohjois-Pohjanmaalla 30 kuntaa");
+// tunnetut sijainnit kuntien sisällä
+const UM = CONTINENTS.mk_uusimaa;
+assert(inCountry(UM, "Helsinki", 24.94, 60.17), "Helsingin keskusta on Helsingissä");
+assert(inCountry(UM, "Espoo", 24.66, 60.21), "Espoon keskus on Espoossa");
+assert(!inCountry(UM, "Espoo", 25.66, 60.39), "Porvoo ei ole Espoossa");
+assert(inCountry(UM, "Kauniainen", 24.73, 60.21), "Kauniainen osuu");
+const LA = CONTINENTS.mk_lappi;
+assert(inCountry(LA, "Rovaniemi", 25.73, 66.50), "Rovaniemen keskusta on Rovaniemellä");
+assert(inCountry(LA, "Utsjoki", 27.03, 69.91), "Utsjoen kirkonkylä on Utsjoella");
+// haaste ei sisällä maakuntia
+assert(!MK.some(k => ["eurooppa","aasia","afrikka","pohjois_amerikka","etela_amerikka","oseania"].includes(k)),
+  "maakunnat eivät ole haastelistalla");
+
 assert.strictEqual(fmtTime(150), "2:30", "ajan muotoilu");
 assert.strictEqual(fmtTime(65), "1:05", "ajan muotoilu, etunolla");
 assert.strictEqual(fmtTime(-3), "0:00", "ei negatiivista aikaa");
