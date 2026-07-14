@@ -118,6 +118,7 @@ window.addEventListener("error", function (e) {
   }
   .overlay.hidden { display: none; }
   .frame {
+    position: relative;   /* kielinapin kiinnitys kulmaan */
     border: 10px solid #7869c4; padding: 20px 24px; border-radius: 4px;
     max-width: 480px; width: 100%;
     /* margin auto keskittää, kun sisältö mahtuu ruutuun, ja sallii
@@ -138,6 +139,7 @@ window.addEventListener("error", function (e) {
   button:active { background: #6a55d6; }
   .conts button { font-size: 13.5px; padding: 9px 4px; }
   .conts button.sel { background: #2e9e44; border-color: #7fd992; }
+  #langbtn { position: absolute; top: 8px; right: 8px; font-size: 12.5px; padding: 6px 9px; }
   #mkbtns { border: 1px solid #7869c4; border-radius: 10px; padding: 6px; margin-top: 8px; }
   #mkbtns.hidden { display: none; }
   #mkbtns button { font-size: 12.5px; }
@@ -208,18 +210,19 @@ window.addEventListener("error", function (e) {
 
 <div id="start" class="overlay">
   <div class="frame">
+    <button id="langbtn">🌐 English</button>
     <div class="copter">🚁</div>
-    <h1>MAAILMAN KARTTA</h1>
-    <p>Lennä helikopterilla etsimääsi kohteeseen tatilla tai sormella karttaa koskettamalla. Kun olet kohteen päällä, <b>tuplanapauta tattia</b>, niin kopteri laskeutuu ja paikka tarkistetaan. Tietokoneella ohjaat nuolinäppäimillä ja laskeudut välilyönnillä.</p>
-    <p>Kello käy: oikea löytö antaa <b>lisäaikaa</b> ja väärä paikka <b>vie sitä</b>. Ekstrabonuksen saa helpolla tasolla joka 10., keskitasolla joka 15. ja vaikealla joka 20. löydöstä. Lähtöaika ja sekuntimäärät riippuvat vaikeustasosta. Peli päättyy, kun kaikki kohteet on löydetty tai aika loppuu.</p>
-    <p id="jswarn" style="color:#ffc4b8;font-weight:600">⚠️ Pelin koodi ei ole käynnistynyt, koska tämä katselin ei suorita JavaScriptiä. Avaa tiedosto Chromella: Chrome-valikko ⋮ → Lataukset. Sovellusten esikatselu ja HTML-katselin eivät kelpaa.</p>
-    <p>Valitse alue:</p>
+    <h1 id="title">MAAILMAN KARTTA</h1>
+    <p id="intro1">Lennä helikopterilla etsimääsi kohteeseen tatilla tai sormella karttaa koskettamalla. Kun olet kohteen päällä, <b>tuplanapauta tattia</b>, niin kopteri laskeutuu ja paikka tarkistetaan. Tietokoneella ohjaat nuolinäppäimillä ja laskeudut välilyönnillä.</p>
+    <p id="intro2">Kello käy: oikea löytö antaa <b>lisäaikaa</b> ja väärä paikka <b>vie sitä</b>. Ekstrabonuksen saa helpolla tasolla joka 10., keskitasolla joka 15. ja vaikealla joka 20. löydöstä. Lähtöaika ja sekuntimäärät riippuvat vaikeustasosta. Peli päättyy, kun kaikki kohteet on löydetty tai aika loppuu.</p>
+    <p id="jswarn" style="color:#ffc4b8;font-weight:600">⚠️ Pelin koodi ei ole käynnistynyt, koska tämä katselin ei suorita JavaScriptiä. Avaa tiedosto Chromella: Chrome-valikko ⋮ → Lataukset. Sovellusten esikatselu ja HTML-katselin eivät kelpaa. (The game code did not start because this viewer does not run JavaScript — open the file in Chrome.)</p>
+    <p id="choosearea">Valitse alue:</p>
     <div class="conts" id="contbtns"></div>
     <div class="conts hidden" id="mkbtns"></div>
-    <p>Valitse vaikeustaso:</p>
+    <p id="choosediff">Valitse vaikeustaso:</p>
     <div class="diffs" id="diffbtns"></div>
-    <button id="learnbtn">🎓 Opettelu<span class="best">Ei aikarajaa, ennätyksiä ei tallenneta ja löydettyjen nimet jäävät kartalle</span></button>
-    <p>Valitse pelimuoto:</p>
+    <button id="learnbtn"><span id="lrn-t">🎓 Opettelu</span><span class="best" id="lrn-d">Ei aikarajaa, ennätyksiä ei tallenneta ja löydettyjen nimet jäävät kartalle</span></button>
+    <p id="choosemode">Valitse pelimuoto:</p>
     <div class="modes">
       <button data-mode="pk"><span id="lbl-pk">Pääkaupungit</span><span class="best" id="best-pk"></span></button>
       <button data-mode="kau"><span id="lbl-kau">Suurkaupungit</span><span class="best" id="best-kau"></span></button>
@@ -228,7 +231,7 @@ window.addEventListener("error", function (e) {
       <button data-mode="luonto"><span id="lbl-luonto">Luonnonkohteet</span><span class="best" id="best-luonto"></span></button>
       <button data-mode="seka" style="grid-column:1/-1"><span id="lbl-seka">Sekoitus</span><span class="best" id="best-seka"></span></button>
     </div>
-    <button id="challengebtn">🏆 Haaste<span class="best">Kaikki maanosat putkeen, 15 kohdetta kustakin, läpäisystä +20 s. Aikaa 1:50 · +5 s / −15 s<span id="best-haaste"></span></span></button>
+    <button id="challengebtn"><span id="ch-t">🏆 Haaste</span><span class="best"><span id="ch-d">Kaikki maanosat putkeen, 15 kohdetta kustakin, läpäisystä +20 s. Aikaa 1:50 · +5 s / −15 s</span><span id="best-haaste"></span></span></button>
   </div>
 </div>
 
@@ -339,68 +342,68 @@ const CITY_DATA = {
   },
   eurooppa: {
     pk: [
-      ["Helsinki",60.17,24.94],["Tukholma",59.33,18.06],["Oslo",59.91,10.75],
-      ["Kööpenhamina",55.68,12.57],["Reykjavik",64.15,-21.94],["Tallinna",59.44,24.75],
-      ["Riika",56.95,24.11],["Vilna",54.69,25.28],["Varsova",52.23,21.01],
-      ["Berliini",52.52,13.40],["Amsterdam",52.37,4.90],["Bryssel",50.85,4.35],
-      ["Luxemburg",49.61,6.13],["Pariisi",48.86,2.35],["Lontoo",51.51,-0.13],
-      ["Dublin",53.35,-6.26],["Lissabon",38.72,-9.14],["Madrid",40.42,-3.70],
-      ["Rooma",41.90,12.50],["Bern",46.95,7.45],["Wien",48.21,16.37],
-      ["Praha",50.08,14.44],["Bratislava",48.15,17.11],["Budapest",47.50,19.04],
+      ["Helsinki",60.17,24.94],["Tukholma",59.33,18.06,"Stockholm"],["Oslo",59.91,10.75],
+      ["Kööpenhamina",55.68,12.57,"Copenhagen"],["Reykjavik",64.15,-21.94],["Tallinna",59.44,24.75,"Tallinn"],
+      ["Riika",56.95,24.11,"Riga"],["Vilna",54.69,25.28,"Vilnius"],["Varsova",52.23,21.01,"Warsaw"],
+      ["Berliini",52.52,13.40,"Berlin"],["Amsterdam",52.37,4.90],["Bryssel",50.85,4.35,"Brussels"],
+      ["Luxemburg",49.61,6.13,"Luxembourg"],["Pariisi",48.86,2.35,"Paris"],["Lontoo",51.51,-0.13,"London"],
+      ["Dublin",53.35,-6.26],["Lissabon",38.72,-9.14,"Lisbon"],["Madrid",40.42,-3.70],
+      ["Rooma",41.90,12.50,"Rome"],["Bern",46.95,7.45],["Wien",48.21,16.37,"Vienna"],
+      ["Praha",50.08,14.44,"Prague"],["Bratislava",48.15,17.11],["Budapest",47.50,19.04],
       ["Ljubljana",46.06,14.51],["Zagreb",45.81,15.98],["Sarajevo",43.86,18.41],
-      ["Belgrad",44.79,20.45],["Podgorica",42.44,19.26],["Tirana",41.33,19.82],
-      ["Skopje",42.00,21.43],["Ateena",37.98,23.73],["Sofia",42.70,23.32],
-      ["Bukarest",44.43,26.10],["Chișinău",47.01,28.86],["Kiova",50.45,30.52],
-      ["Minsk",53.90,27.57],["Moskova",55.76,37.62],["Ankara",39.93,32.86],
-      ["Nikosia",35.17,33.36],["Valletta",35.90,14.51]
+      ["Belgrad",44.79,20.45,"Belgrade"],["Podgorica",42.44,19.26],["Tirana",41.33,19.82],
+      ["Skopje",42.00,21.43],["Ateena",37.98,23.73,"Athens"],["Sofia",42.70,23.32],
+      ["Bukarest",44.43,26.10,"Bucharest"],["Chișinău",47.01,28.86],["Kiova",50.45,30.52,"Kyiv"],
+      ["Minsk",53.90,27.57],["Moskova",55.76,37.62,"Moscow"],["Ankara",39.93,32.86],
+      ["Nikosia",35.17,33.36,"Nicosia"],["Valletta",35.90,14.51]
     ],
     kau: [
       ["Turku",60.45,22.27],["Oulu",65.01,25.47],["Rovaniemi",66.50,25.73],
-      ["Göteborg",57.71,11.97],["Bergen",60.39,5.32],["Pietari",59.93,30.34],
-      ["Gdańsk",54.35,18.65],["Krakova",50.06,19.94],["Hampuri",53.55,9.99],
-      ["München",48.14,11.58],["Frankfurt",50.11,8.68],["Köln",50.94,6.96],
-      ["Rotterdam",51.92,4.48],["Antwerpen",51.22,4.40],["Manchester",53.48,-2.24],
+      ["Göteborg",57.71,11.97,"Gothenburg"],["Bergen",60.39,5.32],["Pietari",59.93,30.34,"Saint Petersburg"],
+      ["Gdańsk",54.35,18.65],["Krakova",50.06,19.94,"Kraków"],["Hampuri",53.55,9.99,"Hamburg"],
+      ["München",48.14,11.58,"Munich"],["Frankfurt",50.11,8.68],["Köln",50.94,6.96,"Cologne"],
+      ["Rotterdam",51.92,4.48],["Antwerpen",51.22,4.40,"Antwerp"],["Manchester",53.48,-2.24],
       ["Liverpool",53.41,-2.98],["Birmingham",52.48,-1.90],["Glasgow",55.86,-4.25],
-      ["Edinburgh",55.95,-3.19],["Porto",41.15,-8.61],["Sevilla",37.39,-5.99],
+      ["Edinburgh",55.95,-3.19],["Porto",41.15,-8.61],["Sevilla",37.39,-5.99,"Seville"],
       ["Barcelona",41.39,2.17],["Bilbao",43.26,-2.94],["Marseille",43.30,5.37],
-      ["Lyon",45.76,4.84],["Nizza",43.70,7.27],["Milano",45.46,9.19],
-      ["Venetsia",45.44,12.32],["Firenze",43.77,11.26],["Napoli",40.85,14.27],
-      ["Palermo",38.12,13.36],["Zürich",47.37,8.54],["Geneve",46.20,6.14],
+      ["Lyon",45.76,4.84],["Nizza",43.70,7.27,"Nice"],["Milano",45.46,9.19,"Milan"],
+      ["Venetsia",45.44,12.32,"Venice"],["Firenze",43.77,11.26,"Florence"],["Napoli",40.85,14.27,"Naples"],
+      ["Palermo",38.12,13.36],["Zürich",47.37,8.54,"Zurich"],["Geneve",46.20,6.14,"Geneva"],
       ["Dubrovnik",42.65,18.09],["Thessaloniki",40.64,22.94],["Istanbul",41.01,28.98],
-      ["Odessa",46.48,30.72]
+      ["Odessa",46.48,30.72,"Odesa"]
     ]
   },
   aasia: {
     pk: [
-      ["Peking",39.90,116.40],["Tokio",35.68,139.69],["New Delhi",28.61,77.21],
+      ["Peking",39.90,116.40,"Beijing"],["Tokio",35.68,139.69,"Tokyo"],["New Delhi",28.61,77.21],
       ["Islamabad",33.69,73.06],["Dhaka",23.81,90.41],["Kabul",34.53,69.17],
-      ["Teheran",35.69,51.39],["Bagdad",33.31,44.36],["Riad",24.71,46.68],
-      ["Sana",15.35,44.21],["Maskat",23.59,58.41],["Abu Dhabi",24.45,54.38],
-      ["Jerusalem",31.77,35.21],["Amman",31.95,35.93],["Damaskos",33.51,36.29],
-      ["Astana",51.17,71.43],["Taškent",41.30,69.24],["Ašgabat",37.96,58.33],
-      ["Biškek",42.87,74.59],["Dušanbe",38.56,68.79],["Ulan Bator",47.89,106.91],
-      ["Pjongjang",39.03,125.75],["Soul",37.57,126.98],["Hanoi",21.03,105.85],
+      ["Teheran",35.69,51.39,"Tehran"],["Bagdad",33.31,44.36,"Baghdad"],["Riad",24.71,46.68,"Riyadh"],
+      ["Sana",15.35,44.21,"Sanaa"],["Maskat",23.59,58.41,"Muscat"],["Abu Dhabi",24.45,54.38],
+      ["Jerusalem",31.77,35.21],["Amman",31.95,35.93],["Damaskos",33.51,36.29,"Damascus"],
+      ["Astana",51.17,71.43],["Taškent",41.30,69.24,"Tashkent"],["Ašgabat",37.96,58.33,"Ashgabat"],
+      ["Biškek",42.87,74.59,"Bishkek"],["Dušanbe",38.56,68.79,"Dushanbe"],["Ulan Bator",47.89,106.91,"Ulaanbaatar"],
+      ["Pjongjang",39.03,125.75,"Pyongyang"],["Soul",37.57,126.98,"Seoul"],["Hanoi",21.03,105.85],
       ["Vientiane",17.98,102.63],["Phnom Penh",11.55,104.92],["Bangkok",13.76,100.50],
       ["Naypyidaw",19.76,96.08],["Kuala Lumpur",3.14,101.69],["Manila",14.60,120.98],
       ["Colombo",6.93,79.85],["Kathmandu",27.72,85.32],["Tbilisi",41.72,44.79],
-      ["Jerevan",40.18,44.51],["Baku",40.41,49.87],["Taipei",25.03,121.57],
+      ["Jerevan",40.18,44.51,"Yerevan"],["Baku",40.41,49.87],["Taipei",25.03,121.57],
       ["Jakarta",-6.21,106.85],["Singapore",1.35,103.82]
     ],
     kau: [
-      ["Shanghai",31.23,121.47],["Guangzhou",23.13,113.26],["Hongkong",22.32,114.17],
+      ["Shanghai",31.23,121.47],["Guangzhou",23.13,113.26],["Hongkong",22.32,114.17,"Hong Kong"],
       ["Chengdu",30.57,104.07],["Xi'an",34.34,108.94],["Osaka",34.69,135.50],
       ["Busan",35.18,129.08],["Mumbai",19.08,72.88],["Kolkata",22.57,88.36],
       ["Bengaluru",12.97,77.59],["Chennai",13.08,80.27],["Karachi",24.86,67.01],
-      ["Lahore",31.55,74.34],["Dubai",25.20,55.27],["Mekka",21.39,39.86],
-      ["Ho Chi Minh",10.82,106.63],["Surabaya",-7.25,112.75]
+      ["Lahore",31.55,74.34],["Dubai",25.20,55.27],["Mekka",21.39,39.86,"Mecca"],
+      ["Ho Chi Minh",10.82,106.63,"Ho Chi Minh City"],["Surabaya",-7.25,112.75]
     ]
   },
   afrikka: {
     pk: [
-      ["Kairo",30.04,31.24],["Tripoli",32.89,13.19],["Tunis",36.81,10.18],
-      ["Alger",36.75,3.06],["Rabat",34.02,-6.84],["Nouakchott",18.08,-15.98],
+      ["Kairo",30.04,31.24,"Cairo"],["Tripoli",32.89,13.19],["Tunis",36.81,10.18],
+      ["Alger",36.75,3.06,"Algiers"],["Rabat",34.02,-6.84],["Nouakchott",18.08,-15.98],
       ["Bamako",12.64,-8.00],["Niamey",13.51,2.13],["N'Djamena",12.13,15.06],
-      ["Khartum",15.50,32.56],["Juba",4.85,31.58],["Addis Abeba",9.03,38.74],
+      ["Khartum",15.50,32.56,"Khartoum"],["Juba",4.85,31.58],["Addis Abeba",9.03,38.74,"Addis Ababa"],
       ["Asmara",15.34,38.93],["Mogadishu",2.05,45.32],["Nairobi",-1.29,36.82],
       ["Dodoma",-6.16,35.75],["Kampala",0.35,32.58],["Kinshasa",-4.44,15.27],
       ["Brazzaville",-4.26,15.24],["Abuja",9.06,7.50],["Accra",5.60,-0.19],
@@ -412,8 +415,8 @@ const CITY_DATA = {
       ["Lilongwe",-13.96,33.77],["Monrovia",6.29,-10.76]
     ],
     kau: [
-      ["Kapkaupunki",-33.93,18.42],["Johannesburg",-26.20,28.05],["Durban",-29.86,31.03],
-      ["Casablanca",33.57,-7.59],["Marrakech",31.63,-7.99],["Aleksandria",31.20,29.92],
+      ["Kapkaupunki",-33.93,18.42,"Cape Town"],["Johannesburg",-26.20,28.05],["Durban",-29.86,31.03],
+      ["Casablanca",33.57,-7.59],["Marrakech",31.63,-7.99],["Aleksandria",31.20,29.92,"Alexandria"],
       ["Lagos",6.52,3.38],["Abidjan",5.36,-4.01],["Mombasa",-4.04,39.67],
       ["Dar es Salaam",-6.79,39.21]
     ]
@@ -421,8 +424,8 @@ const CITY_DATA = {
   pohjois_amerikka: {
     pk: [
       ["Washington",38.91,-77.04],["Ottawa",45.42,-75.70],["Mexico City",19.43,-99.13],
-      ["Guatemala",14.63,-90.51],["Tegucigalpa",14.07,-87.19],["Managua",12.11,-86.24],
-      ["San José",9.93,-84.08],["Panamá",8.98,-79.52],["Havanna",23.11,-82.37],
+      ["Guatemala",14.63,-90.51,"Guatemala City"],["Tegucigalpa",14.07,-87.19],["Managua",12.11,-86.24],
+      ["San José",9.93,-84.08],["Panamá",8.98,-79.52,"Panama City"],["Havanna",23.11,-82.37,"Havana"],
       ["Port-au-Prince",18.54,-72.34],["Santo Domingo",18.49,-69.90],
       ["Kingston",17.97,-76.79],["Nuuk",64.18,-51.72]
     ],
@@ -515,16 +518,22 @@ function shuffle(arr, rnd) {
   return a;
 }
 
-// Arpoo kierroksen 10 tehtävää maanosan ja pelimuodon mukaan
-function makeTasks(mode, C, cities, rnd) {
+// Paikannimet: englanniksi datan rinnakkaiskentistä (maat/luontokohteet e,
+// kaupungit 4. alkio, kartat nameEn); ilman käännöstä suomalainen nimi
+const cityName = (c, lang) => (lang === "en" && c[3]) || c[0];
+const placeName = (o, lang) => (lang === "en" && o.e) || o.n;
+const contName = (C, lang) => (lang === "en" && C.nameEn) || C.name;
+
+// Arpoo kierroksen tehtävät maanosan, pelimuodon ja kielen mukaan
+function makeTasks(mode, C, cities, rnd, lang) {
   rnd = rnd || Math.random;
   cities = cities || { pk: [], kau: [] };   // maakunnilla ei ole kaupunkilistoja
   const cityTask = c => {
     const [x, y] = project(c[2], c[1], C);
-    return { kind: "city", name: c[0], x, y };
+    return { kind: "city", name: cityName(c, lang), x, y };
   };
-  const countryTask = (c, i) => ({ kind: "country", name: c.n, x: c.c[0], y: c.c[1], ci: i });
-  const featTask = (f, i) => ({ kind: "feature", name: f.n, x: f.c[0], y: f.c[1], fi: i });
+  const countryTask = (c, i) => ({ kind: "country", name: placeName(c, lang), x: c.c[0], y: c.c[1], ci: i });
+  const featTask = (f, i) => ({ kind: "feature", name: placeName(f, lang), x: f.c[0], y: f.c[1], fi: i });
   let pool = [];
   if (mode === "pk" || mode === "seka") pool = pool.concat(cities.pk.map(cityTask));
   if (mode === "kau" || mode === "seka") pool = pool.concat(cities.kau.map(cityTask));
@@ -546,17 +555,100 @@ function makeTasks(mode, C, cities, rnd) {
 
 // Vaikeustasot: lähtöaika, bonus oikeasta, sakko väärästä, putkibonus joka every. löydöstä (sekunteja)
 const DIFFS = {
-  helppo:    { name: "Helppo",    icon: "😊", start: 150, bonus: 10, penalty: 10, streak: 10, every: 10 },
-  keskitaso: { name: "Keskitaso", icon: "🙂", start: 120, bonus: 5,  penalty: 15, streak: 10, every: 15 },
-  vaikea:    { name: "Vaikea",    icon: "😈", start: 100, bonus: 5,  penalty: 20, streak: 10, every: 20 }
+  helppo:    { name: "Helppo",    nameEn: "Easy",   icon: "😊", start: 150, bonus: 10, penalty: 10, streak: 10, every: 10 },
+  keskitaso: { name: "Keskitaso", nameEn: "Medium", icon: "🙂", start: 120, bonus: 5,  penalty: 15, streak: 10, every: 15 },
+  vaikea:    { name: "Vaikea",    nameEn: "Hard",   icon: "😈", start: 100, bonus: 5,  penalty: 20, streak: 10, every: 20 }
 };
 
 // Haaste: lähtöaika, bonus oikeasta, sakko väärästä, kohteita/maanosa,
 // maanosan läpäisybonus ja lähtölaskurin pituus (sekunteja)
 const CHALLENGE = { start: 110, bonus: 5, penalty: 15, per: 15, clear: 20, count: 5 };
-function makeChallengeTasks(C, cities, rnd) {
-  return makeTasks("seka", C, cities, rnd).slice(0, CHALLENGE.per);
+function makeChallengeTasks(C, cities, rnd, lang) {
+  return makeTasks("seka", C, cities, rnd, lang).slice(0, CHALLENGE.per);
 }
+
+// Käyttöliittymätekstit; molemmissa kielissä on oltava samat avaimet
+const MODE_KEYS = ["pk", "kau", "opk", "maa", "luonto", "seka"];
+const STR = {
+  fi: {
+    title: "MAAILMAN KARTTA",
+    worldMap: "Maailman kartta",
+    intro1: "Lennä helikopterilla etsimääsi kohteeseen tatilla tai sormella karttaa koskettamalla. Kun olet kohteen päällä, <b>tuplanapauta tattia</b>, niin kopteri laskeutuu ja paikka tarkistetaan. Tietokoneella ohjaat nuolinäppäimillä ja laskeudut välilyönnillä.",
+    intro2: "Kello käy: oikea löytö antaa <b>lisäaikaa</b> ja väärä paikka <b>vie sitä</b>. Ekstrabonuksen saa helpolla tasolla joka 10., keskitasolla joka 15. ja vaikealla joka 20. löydöstä. Lähtöaika ja sekuntimäärät riippuvat vaikeustasosta. Peli päättyy, kun kaikki kohteet on löydetty tai aika loppuu.",
+    chooseArea: "Valitse alue:", chooseDiff: "Valitse vaikeustaso:", chooseMode: "Valitse pelimuoto:",
+    regions: "Maakunnat ▾",
+    learnTitle: "🎓 Opettelu",
+    learnDesc: "Ei aikarajaa, ennätyksiä ei tallenneta ja löydettyjen nimet jäävät kartalle",
+    challengeTitle: "🏆 Haaste",
+    challengeDesc: "Kaikki maanosat putkeen, 15 kohdetta kustakin, läpäisystä +20 s. Aikaa 1:50 · +5 s / −15 s",
+    again: "Pelaa uudestaan", toMenu: "Valikkoon", quit: "Lopeta peli",
+    modes: { pk: "Pääkaupungit", kau: "Suurkaupungit", opk: "Pääkaupungit",
+             maa: "Maat", luonto: "Luonnonkohteet", seka: "Sekoitus" },
+    modeOv: { suomi: { pk: "Isot kaupungit", kau: "Pienet kaupungit" },
+              usa: { pk: "Suurkaupungit", kau: "Muut kaupungit", maa: "Osavaltiot" } },
+    municipalities: "Kunnat",
+    findCity: "Etsi kaupunki: ", findCountry: "Etsi maa: ", findState: "Etsi osavaltio: ",
+    findKunta: "Etsi kunta: ", find: "Etsi: ",
+    prepare: "Valmistaudu: ",
+    continent: "maanosa",
+    learnWord: "opettelu",
+    foundPlain: "Löytyi!",
+    foundBonus: b => `Löytyi! <b>+${b} s</b>`,
+    foundStreak: (b, n, s) => `Löytyi! <b>+${b} s</b> · ${n} löytöä: bonus <b>+${s} s</b>!`,
+    foundStreakLearn: n => `Löytyi! Jo <b>${n}</b> löytöä!`,
+    missed: (p, name, km) => "Ei osunut!" + (p ? ` <b>−${p} s</b> ·` : "") +
+      ` ${name} on n. ${km} km päässä.`,
+    contDone: s => `Maanosa valmis! <b>+${s} s</b>`,
+    endAllCont: "Kaikki maanosat läpi!", endAll: "Kaikki löydetty!", endTime: "Aika loppui!",
+    endChallenge: (i, n) => `Haaste · ${i}/${n} maanosaa`,
+    endFound: (f, n) => ` — löysit ${f}/${n}`,
+    endTimeLeft: t => ` ja aikaa jäi ${t}`,
+    newRecord: "Uusi ennätys!",
+    learnNoRecord: "Opettelussa ennätyksiä ei tallenneta.",
+    bestWord: "Paras:", yourBestWord: "Paras tuloksesi:",
+    bestText: (b, ft) => b.f >= b.n ? `Paras: kaikki ${b.n} (${ft(b.t)} jäljellä)`
+                                    : `Paras: ${b.f}/${b.n}`
+  },
+  en: {
+    title: "WORLD MAP",
+    worldMap: "World Map",
+    intro1: "Fly the helicopter to the requested place with the joystick or by touching the map. When you are over the target, <b>double-tap the joystick</b> to land and check the location. On a computer, steer with the arrow keys and land with the space bar.",
+    intro2: "The clock is running: a correct find adds <b>extra time</b> and a wrong place <b>costs it</b>. You get a streak bonus every 10th find on easy, every 15th on medium and every 20th on hard. The starting time and seconds depend on the difficulty. The game ends when every target is found or time runs out.",
+    chooseArea: "Choose an area:", chooseDiff: "Choose a difficulty:", chooseMode: "Choose a game mode:",
+    regions: "Regions ▾",
+    learnTitle: "🎓 Practice",
+    learnDesc: "No time limit, no records, and the names of found places stay on the map",
+    challengeTitle: "🏆 Challenge",
+    challengeDesc: "All continents in a row, 15 targets each, +20 s for clearing one. Time 1:50 · +5 s / −15 s",
+    again: "Play again", toMenu: "Menu", quit: "Quit game",
+    modes: { pk: "Capitals", kau: "Major cities", opk: "State capitals",
+             maa: "Countries", luonto: "Natural features", seka: "Mixed" },
+    modeOv: { suomi: { pk: "Major cities", kau: "Small towns" },
+              usa: { pk: "Major cities", kau: "Other cities", maa: "States" } },
+    municipalities: "Municipalities",
+    findCity: "Find the city: ", findCountry: "Find the country: ", findState: "Find the state: ",
+    findKunta: "Find the municipality: ", find: "Find: ",
+    prepare: "Get ready: ",
+    continent: "continent",
+    learnWord: "practice",
+    foundPlain: "Found it!",
+    foundBonus: b => `Found it! <b>+${b} s</b>`,
+    foundStreak: (b, n, s) => `Found it! <b>+${b} s</b> · ${n} finds: bonus <b>+${s} s</b>!`,
+    foundStreakLearn: n => `Found it! Already <b>${n}</b> finds!`,
+    missed: (p, name, km) => "Missed!" + (p ? ` <b>−${p} s</b> ·` : "") +
+      ` ${name} is about ${km} km away.`,
+    contDone: s => `Continent cleared! <b>+${s} s</b>`,
+    endAllCont: "All continents cleared!", endAll: "All found!", endTime: "Time's up!",
+    endChallenge: (i, n) => `Challenge · ${i}/${n} continents`,
+    endFound: (f, n) => ` — you found ${f}/${n}`,
+    endTimeLeft: t => ` with ${t} left`,
+    newRecord: "New record!",
+    learnNoRecord: "No records are saved in practice mode.",
+    bestWord: "Best:", yourBestWord: "Your best:",
+    bestText: (b, ft) => b.f >= b.n ? `Best: all ${b.n} (${ft(b.t)} left)`
+                                    : `Best: ${b.f}/${b.n}`
+  }
+};
 
 function fmtTime(sec) {
   sec = Math.max(0, Math.ceil(sec));
@@ -574,17 +666,6 @@ function betterResult(a, b) {
 if (typeof document !== "undefined") {
   const $ = id => document.getElementById(id);
   const svg = $("map"), heliEl = $("heli"), bodyEl = $("hbody"), rotorEl = $("rotor");
-  const MODE_NAMES = { pk: "Pääkaupungit", kau: "Suurkaupungit", opk: "Pääkaupungit",
-                       maa: "Maat", luonto: "Luonnonkohteet", seka: "Sekoitus" };
-  // aluekohtaiset pelimuotojen nimet (Suomi: kaupungit; USA: osavaltiot)
-  const MODE_OVERRIDES = {
-    suomi: { pk: "Isot kaupungit", kau: "Pienet kaupungit" },
-    usa: { pk: "Suurkaupungit", kau: "Muut kaupungit", maa: "Osavaltiot" }
-  };
-  function modeName(m) {
-    if (C && C.mk && m === "maa") return "Kunnat";   // maakunnissa etsitään kuntia
-    return (MODE_OVERRIDES[contKey] || {})[m] || MODE_NAMES[m];
-  }
   const CONT_ORDER = ["suomi", "eurooppa", "aasia", "afrikka",
                       "pohjois_amerikka", "usa", "etela_amerikka", "oseania"];
 
@@ -597,6 +678,16 @@ if (typeof document !== "undefined") {
     if (s.v === SAVE_V) saved = Object.assign(saved, s);
   } catch (e) {}
   function save() { try { localStorage.setItem(STORE, JSON.stringify(saved)); } catch (e) {} }
+
+  // Kieli: käyttöliittymä STR-sanakirjasta, paikannimet datan e-kentistä;
+  // ennätykset ovat yhteiset kielestä riippumatta
+  let lang = saved.lang === "en" ? "en" : "fi";
+  const T = k => STR[lang][k];
+  function modeName(m) {
+    if (C && C.mk && m === "maa") return T("municipalities");   // maakunnissa etsitään kuntia
+    return (T("modeOv")[contKey] || {})[m] || T("modes")[m];
+  }
+  const diffName = k => lang === "en" ? DIFFS[k].nameEn : DIFFS[k].name;
 
   // Ääni
   let actx = null;
@@ -692,7 +783,7 @@ if (typeof document !== "undefined") {
       if (seen.has(c[0])) return;   // sama kaupunki voi olla monessa listassa
       seen.add(c[0]);
       const [x, y] = project(c[2], c[1], C);
-      list.push({ name: c[0], x, y });
+      list.push({ name: cityName(c, lang), x, y });   // sama nimi kuin tehtävissä
     };
     const m = challenge ? "seka" : mode;   // haasteen kohteet arvotaan sekoituspoolista
     if (m === "pk" || m === "seka") cities.pk.forEach(add);
@@ -720,10 +811,10 @@ if (typeof document !== "undefined") {
 
   function hud() {
     const t = tasks[taskIx];
-    const pre = { city: "Etsi kaupunki: ", country: "Etsi maa: ", feature: "Etsi: " };
-    if (contKey === "usa") pre.country = "Etsi osavaltio: ";
-    if (C.mk) pre.country = "Etsi kunta: ";
-    $("task").innerHTML = t ? pre[t.kind] + "<b>" + t.name + "</b>" : "Maailman kartta";
+    const pre = { city: T("findCity"), country: T("findCountry"), feature: T("find") };
+    if (contKey === "usa") pre.country = T("findState");
+    if (C.mk) pre.country = T("findKunta");
+    $("task").innerHTML = t ? pre[t.kind] + "<b>" + t.name + "</b>" : T("worldMap");
     updateClock(true);
   }
 
@@ -739,14 +830,11 @@ if (typeof document !== "undefined") {
   }
 
   function bestText(b) {
-    if (!b) return "";
-    return b.f >= b.n
-      ? "Paras: kaikki " + b.n + " (" + fmtTime(b.t) + " jäljellä)"
-      : "Paras: " + b.f + "/" + b.n;
+    return b ? T("bestText")(b, fmtTime) : "";
   }
 
   function showBests() {
-    for (const m of Object.keys(MODE_NAMES)) {
+    for (const m of MODE_KEYS) {
       $("best-" + m).textContent = bestText(saved.best[contKey + ":" + m + ":" + diff]);
     }
     // haasteen ennätys ei riipu alueesta eikä vaikeustasosta
@@ -757,7 +845,7 @@ if (typeof document !== "undefined") {
   function startGame(m) {
     challenge = false;
     mode = m;
-    tasks = makeTasks(mode, C, cities);
+    tasks = makeTasks(mode, C, cities, null, lang);
     taskIx = 0; found = 0; timeLeft = D().start;
     drawDots();
     $("start").classList.add("hidden");
@@ -781,20 +869,21 @@ if (typeof document !== "undefined") {
 
   function beginContinent() {
     setContinent(chOrder[chIx], true);
-    tasks = makeChallengeTasks(C, cities);
+    tasks = makeChallengeTasks(C, cities, null, lang);
     taskIx = 0;
     drawDots();
     heli.x = C.W / 2; heli.y = C.H / 2; heli.vx = heli.vy = 0;
     cam.x = heli.x; cam.y = heli.y;
     flightTarget = null;
-    toast("<b>" + C.name + "</b> · maanosa " + (chIx + 1) + "/" + chOrder.length, 2500);
+    toast("<b>" + contName(C, lang) + "</b> · " + T("continent") + " " +
+      (chIx + 1) + "/" + chOrder.length, 2500);
     startCountdown();
   }
 
   // Lähtölaskuri: kello ja ohjaus pysähdyksissä, kunnes laskuri on ohi
   function startCountdown() {
     state = "count";
-    $("task").innerHTML = "Valmistaudu: <b>" + C.name + "</b>";
+    $("task").innerHTML = T("prepare") + "<b>" + contName(C, lang) + "</b>";
     updateClock(true);
     let n = CHALLENGE.count;
     const el = $("count");
@@ -819,7 +908,7 @@ if (typeof document !== "undefined") {
   function beginTask() {
     state = "play";
     const t = tasks[taskIx];
-    toast("Etsi: <b>" + t.name + "</b>");
+    toast(T("find") + "<b>" + t.name + "</b>");
     hud();
   }
 
@@ -894,12 +983,11 @@ if (typeof document !== "undefined") {
       } else pulseAt(heli.x, heli.y);
       if (!challenge && found % D().every === 0) {
         if (!learn) timeLeft += D().streak;
-        toast(learn ? "Löytyi! Jo <b>" + found + "</b> löytöä!"
-                    : "Löytyi! <b>+" + D().bonus + " s</b> · " + found +
-                      " löytöä: bonus <b>+" + D().streak + " s</b>!", 1600);
+        toast(learn ? T("foundStreakLearn")(found)
+                    : T("foundStreak")(D().bonus, found, D().streak), 1600);
         beep(523, 0.1, 0); beep(659, 0.1, 0.1); beep(784, 0.1, 0.2); beep(1047, 0.25, 0.3);
       } else {
-        toast(timed() ? "Löytyi! <b>+" + bonus + " s</b>" : "Löytyi!", 1200);
+        toast(timed() ? T("foundBonus")(bonus) : T("foundPlain"), 1200);
         beep(523, 0.12, 0); beep(784, 0.22, 0.12);
       }
       hud();
@@ -908,8 +996,7 @@ if (typeof document !== "undefined") {
       const penalty = challenge ? CHALLENGE.penalty : D().penalty;
       if (timed()) timeLeft -= penalty;
       const km = distKm(heli.x, heli.y, t.x, t.y, kmpx);
-      toast("Ei osunut!" + (timed() ? " <b>−" + penalty + " s</b> ·" : "") +
-        " " + t.name + " on n. " + km + " km päässä.", 2200);
+      toast(T("missed")(timed() ? penalty : 0, t.name, km), 2200);
       showHint(t);
       beep(180, 0.28, 0, "sawtooth");
       updateClock(true);
@@ -925,7 +1012,7 @@ if (typeof document !== "undefined") {
     if (challenge && chIx < chOrder.length - 1) {
       chIx++;
       timeLeft += CHALLENGE.clear;
-      toast("Maanosa valmis! <b>+" + CHALLENGE.clear + " s</b>", 2200);
+      toast(T("contDone")(CHALLENGE.clear), 2200);
       beep(392, 0.15, 0); beep(523, 0.15, 0.15); beep(659, 0.3, 0.3);
       beginContinent();
       return;
@@ -941,18 +1028,18 @@ if (typeof document !== "undefined") {
     const record = timed() && betterResult(result, saved.best[bkey]);
     if (record) { saved.best[bkey] = result; save(); }
     $("end").querySelector("h2").textContent =
-      challenge && cleared ? "Kaikki maanosat läpi!" : cleared ? "Kaikki löydetty!" : "Aika loppui!";
+      challenge && cleared ? T("endAllCont") : cleared ? T("endAll") : T("endTime");
     $("end").querySelector(".copter").textContent = cleared ? "🏆" : "⏰";
     $("endscore").textContent = (challenge
-      ? "Haaste · " + (chIx + 1) + "/" + chOrder.length + " maanosaa"
-      : C.name + " · " + modeName(mode) +
-        (learn ? " · opettelu" : " · " + D().name.toLowerCase())) +
-      " — löysit " + found + "/" + total +
-      (cleared && timed() ? " ja aikaa jäi " + fmtTime(timeLeft) : "");
+      ? T("endChallenge")(chIx + 1, chOrder.length)
+      : contName(C, lang) + " · " + modeName(mode) +
+        (learn ? " · " + T("learnWord") : " · " + diffName(diff).toLowerCase())) +
+      T("endFound")(found, total) +
+      (cleared && timed() ? T("endTimeLeft")(fmtTime(timeLeft)) : "");
     $("endbest").innerHTML = record
-      ? '<span class="record">Uusi ennätys!</span>'
-      : !timed() ? "Opettelussa ennätyksiä ei tallenneta."
-      : bestText(saved.best[bkey]).replace("Paras:", "Paras tuloksesi:");
+      ? '<span class="record">' + T("newRecord") + "</span>"
+      : !timed() ? T("learnNoRecord")
+      : bestText(saved.best[bkey]).replace(T("bestWord"), T("yourBestWord"));
     $("end").classList.remove("hidden");
     showBests();
     if (cleared) { beep(392, 0.15, 0); beep(523, 0.15, 0.15); beep(659, 0.3, 0.3); }
@@ -1039,29 +1126,43 @@ if (typeof document !== "undefined") {
   stickEl.addEventListener("pointercancel", stickEnd);
   stickEl.addEventListener("contextmenu", e => e.preventDefault());
 
-  // Valikot: alueet, Maakunnat-nappi Suomen viereen ja maakuntapaneeli
-  const contHtml = CONT_ORDER.map(k =>
-    `<button data-cont="${k}">${CONTINENTS[k].name}</button>`);
-  contHtml.splice(1, 0, `<button id="mktoggle">Maakunnat ▾<span class="best" id="mksel"></span></button>`);
-  $("contbtns").innerHTML = contHtml.join("");
+  // Valikot: alueet, Maakunnat-nappi Suomen viereen ja maakuntapaneeli.
+  // Rakennetaan uudelleen kielen vaihtuessa (nimet tulevat sanakirjasta).
   const mkKeys = Object.keys(CONTINENTS).filter(k => CONTINENTS[k].mk);
-  $("mkbtns").innerHTML = mkKeys.map(k =>
-    `<button data-cont="${k}">${CONTINENTS[k].name}</button>`).join("");
-  const contBtns = document.querySelectorAll("#contbtns button[data-cont]");
-  const mkBtns = document.querySelectorAll("#mkbtns button");
+  let contBtns, mkBtns, diffBtns;
+  function buildMenus() {
+    const contHtml = CONT_ORDER.map(k =>
+      `<button data-cont="${k}">${contName(CONTINENTS[k], lang)}</button>`);
+    contHtml.splice(1, 0, `<button id="mktoggle">${T("regions")}<span class="best" id="mksel"></span></button>`);
+    $("contbtns").innerHTML = contHtml.join("");
+    $("mkbtns").innerHTML = mkKeys.map(k =>
+      `<button data-cont="${k}">${contName(CONTINENTS[k], lang)}</button>`).join("");
+    contBtns = document.querySelectorAll("#contbtns button[data-cont]");
+    mkBtns = document.querySelectorAll("#mkbtns button");
+    contBtns.forEach(b => b.addEventListener("click", () => selectContinent(b.dataset.cont)));
+    mkBtns.forEach(b => b.addEventListener("click", () => selectContinent(b.dataset.cont)));
+    $("mktoggle").addEventListener("click", () => $("mkbtns").classList.toggle("hidden"));
+    $("diffbtns").innerHTML = Object.keys(DIFFS).map(k => {
+      const d = DIFFS[k];
+      return `<button data-diff="${k}">${d.icon} ${diffName(k)}<span class="best">` +
+        `${fmtTime(d.start)} · +${d.bonus} s / −${d.penalty} s</span></button>`;
+    }).join("");
+    diffBtns = document.querySelectorAll("#diffbtns button");
+    diffBtns.forEach(b => b.addEventListener("click", () => setDiff(b.dataset.diff)));
+  }
   function selectContinent(key) {
     setContinent(key);
     const mk = !!C.mk;
     contBtns.forEach(b => b.classList.toggle("sel", b.dataset.cont === key));
     mkBtns.forEach(b => b.classList.toggle("sel", b.dataset.cont === key));
     $("mktoggle").classList.toggle("sel", mk);
-    $("mksel").textContent = mk ? C.name : "";
+    $("mksel").textContent = mk ? contName(C, lang) : "";
     // paneeli auki maakuntaa valittaessa, kiinni tavallisen alueen valinnasta
     $("mkbtns").classList.toggle("hidden", !mk);
     // pelimuotojen nimet alueen mukaan; maakunnissa vain Kunnat, muuten Maat
     // piiloon jos kohdemaita on vain yksi ja osavaltioiden pääkaupungit
     // näkyviin vain, jos alueella on opk-lista
-    for (const m of Object.keys(MODE_NAMES)) $("lbl-" + m).textContent = modeName(m);
+    for (const m of MODE_KEYS) $("lbl-" + m).textContent = modeName(m);
     const show = { pk: !mk, kau: !mk, opk: !mk && !!cities.opk,
                    maa: C.countries.length >= 2, luonto: !mk, seka: !mk };
     for (const m of Object.keys(show)) {
@@ -1071,23 +1172,36 @@ if (typeof document !== "undefined") {
     }
     showBests();
   }
-  contBtns.forEach(b => b.addEventListener("click", () => selectContinent(b.dataset.cont)));
-  mkBtns.forEach(b => b.addEventListener("click", () => selectContinent(b.dataset.cont)));
-  $("mktoggle").addEventListener("click", () => $("mkbtns").classList.toggle("hidden"));
-  $("diffbtns").innerHTML = Object.keys(DIFFS).map(k => {
-    const d = DIFFS[k];
-    return `<button data-diff="${k}">${d.icon} ${d.name}<span class="best">` +
-      `${fmtTime(d.start)} · +${d.bonus} s / −${d.penalty} s</span></button>`;
-  }).join("");
-  const diffBtns = document.querySelectorAll("#diffbtns button");
   function setDiff(k) {
     diff = DIFFS[k] ? k : "keskitaso";
     diffBtns.forEach(b => b.classList.toggle("sel", b.dataset.diff === diff));
     saved.diff = diff; save();
     if (contKey) showBests();   // ennätykset ovat tasokohtaisia
   }
-  diffBtns.forEach(b => b.addEventListener("click", () => setDiff(b.dataset.diff)));
-  setDiff(saved.diff);
+  // Kielenvaihto: staattiset tekstit sanakirjasta ja valikot uusiksi
+  function applyLang() {
+    document.documentElement.lang = lang;
+    $("langbtn").textContent = lang === "fi" ? "🌐 English" : "🌐 Suomeksi";
+    for (const [id, key] of [["title", "title"], ["choosearea", "chooseArea"],
+        ["choosediff", "chooseDiff"], ["choosemode", "chooseMode"],
+        ["lrn-t", "learnTitle"], ["lrn-d", "learnDesc"],
+        ["ch-t", "challengeTitle"], ["ch-d", "challengeDesc"],
+        ["again", "again"], ["tomenu", "toMenu"]])
+      $(id).textContent = T(key);
+    $("intro1").innerHTML = T("intro1");
+    $("intro2").innerHTML = T("intro2");
+    $("quitbtn").setAttribute("aria-label", T("quit"));
+    buildMenus();
+    setDiff(diff);
+    selectContinent(contKey || (CONTINENTS[saved.cont] ? saved.cont : "eurooppa"));
+    hud();
+  }
+  $("langbtn").addEventListener("click", () => {
+    lang = lang === "fi" ? "en" : "fi";
+    saved.lang = lang; save();
+    applyLang();
+  });
+  diff = DIFFS[saved.diff] ? saved.diff : "keskitaso";   // napit tulevat applyLangissa
   function setLearn(v) {
     learn = v;
     $("learnbtn").classList.toggle("sel", learn);
@@ -1199,8 +1313,7 @@ if (typeof document !== "undefined") {
     requestAnimationFrame(frame);
   }
 
-  selectContinent(CONTINENTS[saved.cont] ? saved.cont : "eurooppa");
-  hud();
+  applyLang();   // asettaa tekstit, rakentaa valikot ja valitsee tallennetun alueen
   requestAnimationFrame(frame);
   $("jswarn").style.display = "none";   // koodi käynnistyi asti tänne
 

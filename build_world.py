@@ -358,6 +358,53 @@ FOREST_FI = {"Amazonin allas", "Kongon allas"}
 WETLAND_FI = {"Pantanal"}
 CANYON_FI = {"Grand Canyon"}
 
+# ------------------------------------------- englanninkieliset nimet
+# Karttojen nimet (kenttä nameEn)
+CONT_EN = {
+    "suomi": "Finland", "eurooppa": "Europe", "aasia": "Asia",
+    "afrikka": "Africa", "usa": "United States",
+    "pohjois_amerikka": "North America", "etela_amerikka": "South America",
+    "oseania": "Oceania",
+}
+
+# Maiden englanninkielinen nimi on NE-aineiston ADMIN; nämä siistitään
+COUNTRY_EN_OVERRIDES = {
+    "United States of America": "United States",
+    "United Republic of Tanzania": "Tanzania",
+    "Democratic Republic of the Congo": "DR Congo",
+    "Republic of the Congo": "Congo",
+    "Republic of Serbia": "Serbia",
+    "Guinea Bissau": "Guinea-Bissau",
+    "eSwatini": "Eswatini",
+    "Federated States of Micronesia": "Micronesia",
+}
+
+# Luontokohteiden englanninnos johdetaan NE-nimestä; poikkeukset tähän
+# (avain on suomenkielinen nimi)
+FEATURE_EN = {
+    "Skandinavian niemimaa": "Scandinavian Peninsula",
+    "Balkanin niemimaa": "Balkan Peninsula",
+    "Iberian niemimaa": "Iberian Peninsula",
+    "Lappi": "Lapland",
+    "Inarijärvi": "Lake Inari",
+    "Tiibetin ylänkö": "Tibetan Plateau",
+    "Jangtse": "Yangtze",
+    "Keltainenjoki": "Yellow River",
+    "Appalakit": "Appalachian Mountains",
+    "Jukatanin niemimaa": "Yucatán Peninsula",
+    "Atacama": "Atacama Desert",
+    "Tulimaa": "Tierra del Fuego",
+    "Titicaca": "Lake Titicaca",
+    "Amazon": "Amazon",
+}
+
+
+def feature_en(fi, ne_names):
+    if fi in FEATURE_EN:
+        return FEATURE_EN[fi]
+    ne = ne_names[0]
+    return ne.title() if ne.isupper() else ne
+
 
 # ---------------------------------------------------------------- geometria
 
@@ -765,6 +812,19 @@ def main():
         targets = [{"n": fi, "c": rings_centroid(rings),
                     "d": path_d(rings), "p": flat(rings)}
                    for fi, rings in target_rings.items()]
+        # englanninkieliset nimet: maat NE:n ADMIN-nimestä (siistittynä),
+        # osavaltiot NE:n name-kentästä; vain jos eri kuin suomalainen
+        en_names = {}
+        for admin, fi in cfg["countries"].items():
+            if admin == "Aland":   # Ahvenanmaa yhdistyy Suomeen
+                continue
+            en_names.setdefault(fi, COUNTRY_EN_OVERRIDES.get(admin, admin))
+        for ne_name, fi in cfg.get("states", {}).items():
+            en_names.setdefault(fi, ne_name)
+        for t in targets:
+            en = en_names.get(t["n"])
+            if en and en != t["n"]:
+                t["e"] = en
         wanted_fi = set(cfg["countries"].values()) | set(cfg.get("states", {}).values())
         missing = wanted_fi - set(target_rings)
         if missing:
@@ -805,9 +865,12 @@ def main():
                 if not lines:
                     print(f"!! {cfg['name']}: jokea ei löytynyt: {fi} {ne_names}")
                     continue
-                features.append({"n": fi, "k": "j",
-                                 "c": lines_midpoint(lines),
-                                 "l": flat(lines)})
+                feat = {"n": fi, "k": "j", "c": lines_midpoint(lines),
+                        "l": flat(lines)}
+                en = feature_en(fi, ne_names)
+                if en != fi:
+                    feat["e"] = en
+                features.append(feat)
                 river_draw.extend(lines)
             else:
                 geo = {"marine": marine_geo, "lake": lakes_geo,
@@ -820,9 +883,12 @@ def main():
                 if not rings:
                     print(f"!! {cfg['name']}: aluetta ei löytynyt: {fi} {ne_names}")
                     continue
-                features.append({"n": fi, "k": "a",
-                                 "c": rings_centroid(rings),
-                                 "p": flat(rings)})
+                feat = {"n": fi, "k": "a", "c": rings_centroid(rings),
+                        "p": flat(rings)}
+                en = feature_en(fi, ne_names)
+                if en != fi:
+                    feat["e"] = en
+                features.append(feat)
                 for sk, (names, step_u, _) in symbol_types.items():
                     if fi in names:
                         # pieni alue voi jäädä ruudukolta väliin: silloin keskipiste
@@ -831,7 +897,7 @@ def main():
                         break
 
         world[key] = {
-            "name": cfg["name"], "W": W, "H": H,
+            "name": cfg["name"], "nameEn": CONT_EN[key], "W": W, "H": H,
             "lon0": lon0, "lon1": lon1, "lat0": lat0, "lat1": lat1,
             "cos": round(cos, 6),
             "countries": targets, "bg": "".join(bg),
@@ -934,7 +1000,8 @@ def main():
             river_draw.extend(geom_lines(feat["geometry"], project, W, H))
 
         world["mk_" + slug(mk_nimi)] = {
-            "name": mk_nimi, "mk": 1, "W": W, "H": H,
+            "name": mk_nimi, "nameEn": mf["properties"]["name"],   # virallinen käännös
+            "mk": 1, "W": W, "H": H,
             "lon0": bbox[0], "lon1": bbox[1], "lat0": bbox[2], "lat1": bbox[3],
             "cos": round(cos, 6),
             "countries": targets, "bg": "".join(bg),

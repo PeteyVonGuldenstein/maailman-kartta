@@ -2,8 +2,10 @@
 
 C64-henkinen maantiedon etsintäpeli: lennä helikopterilla ja etsi kaupungit,
 maat, kunnat ja luonnonkohteet kartalta. Suomi, kuusi maanosaa ja Manner-Suomen
-18 maakuntaa kuntineen, aikahyökkäys- ja opettelumuodot. Toimii puhelimessa
-webappina, myös offline.
+18 maakuntaa kuntineen, aikahyökkäys- ja opettelumuodot. Pelikieleksi voi
+vaihtaa englannin (🌐-nappi valikossa; paikannimetkin vaihtuvat, ennätykset
+ovat yhteiset). Toimii puhelimessa webappina, myös offline. PWA-sovelluksen
+nimi on aina suomeksi.
 
 **Pelaa: https://peteyvonguldenstein.github.io/maailman-kartta/**
 

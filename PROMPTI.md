@@ -28,7 +28,10 @@ sisältää kaikki yksityiskohdat, joihin tämä toteutus päätyi iteroimalla.
 > 18 maakuntaa, kukin omana zoomattuna karttanaan, jolta etsitään sen
 > kunnat (rajat Tilastokeskuksen avoimesta rajapinnasta, CC BY 4.0).
 > Ennätykset maanosittain/maakunnittain ja vaikeustasoittain (haasteella
-> omansa) localStorageen. Kaikki tekstit suomeksi.
+> omansa) localStorageen. Kaikki tekstit suomeksi, ja valikon 🌐-napista
+> koko pelin voi vaihtaa englanniksi (myös paikannimet: Lontoo→London,
+> Saksa→Germany, Itämeri→Baltic Sea; kunnat pysyvät suomeksi ja
+> ennätykset ovat kielestä riippumattomat).
 
 ## Täysi speksi
 
@@ -146,6 +149,18 @@ ainoana pelimuotona etsitään maakunnan kuntia ("Etsi kunta: Iitti").
 Pääkaupungit ja suurkaupungit suomalaisin nimin per maanosa (Eurooppa
 41 + 37, Aasia 38 + 17, Afrikka 37 + 10, P-Am 13 + 18, E-Am 12 + 14,
 Oseania 7 + 11), koordinaatit datana HTML:ssä. Kaikki UI-tekstit suomeksi.
+
+### Kielet
+Valikon 🌐-nappi vaihtaa suomen ja englannin välillä; valinta tallentuu
+(`saved.lang`). UI-tekstit `STR = { fi, en }` -sanakirjasta (samat avaimet
+molemmissa, arvo voi olla funktio). Paikannimet käännetään datan
+rinnakkaiskentistä: maat/luontokohteet `e` (NE:n englanninkielinen nimi
+siistittynä build-skriptissä), kartat `nameEn` (maakunnilla Tilastokeskuksen
+virallinen englanninnos), kaupungit CITY_DATA-rivin valinnainen 4. alkio
+(vain kun nimi eroaa: ["Lontoo",51.51,-0.13,"London"]). Kuntien nimet eivät
+käänny. Tehtävälistat luodaan valitulla kielellä (`makeTasks`in lang-
+parametri); ennätysavaimet eivät riipu kielestä. Kielen vaihto rakentaa
+valikot uudelleen (`applyLang`).
 
 ### Jakelu
 Pythonin `ThreadingHTTPServer` (portti 8095, `Cache-Control: no-store`) +

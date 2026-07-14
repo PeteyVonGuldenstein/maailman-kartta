@@ -206,6 +206,49 @@ assert(inCountry(LA, "Utsjoki", 27.03, 69.91), "Utsjoen kirkonkylä on Utsjoella
 assert(!MK.some(k => ["eurooppa","aasia","afrikka","pohjois_amerikka","etela_amerikka","oseania"].includes(k)),
   "maakunnat eivät ole haastelistalla");
 
+// Kielet: sanakirjojen avaimet täsmäävät ja nimikäännökset toimivat
+assert.deepStrictEqual(Object.keys(STR.fi), Object.keys(STR.en), "STR: samat avaimet fi ja en");
+for (const k of Object.keys(STR.fi))
+  assert.strictEqual(typeof STR.fi[k], typeof STR.en[k], "STR: sama tyyppi: " + k);
+assert.deepStrictEqual(Object.keys(STR.fi.modes), MODE_KEYS, "STR: pelimuotoavaimet");
+function en(C, n) { const c = C.countries.find(c => c.n === n); return c && (c.e || c.n); }
+function enFeat(C, n) { const f = C.features.find(f => f.n === n); return f && (f.e || f.n); }
+assert.strictEqual(en(CONTINENTS.eurooppa, "Saksa"), "Germany", "Saksa on Germany");
+assert.strictEqual(en(CONTINENTS.eurooppa, "Tšekki"), "Czechia", "Tšekki on Czechia");
+assert.strictEqual(en(CONTINENTS.aasia, "Kiina"), "China", "Kiina on China");
+assert.strictEqual(en(CONTINENTS.afrikka, "Etelä-Afrikka"), "South Africa", "Etelä-Afrikka on South Africa");
+assert.strictEqual(en(CONTINENTS.usa, "Etelä-Carolina"), "South Carolina", "Etelä-Carolina on South Carolina");
+assert.strictEqual(en(CONTINENTS.pohjois_amerikka, "Yhdysvallat"), "United States", "Yhdysvallat on United States");
+assert.strictEqual(enFeat(CONTINENTS.eurooppa, "Itämeri"), "Baltic Sea", "Itämeri on Baltic Sea");
+assert.strictEqual(enFeat(CONTINENTS.eurooppa, "Alpit"), "Alps", "Alpit on Alps");
+assert.strictEqual(enFeat(CONTINENTS.aasia, "Jangtse"), "Yangtze", "Jangtse on Yangtze");
+assert.strictEqual(CONTINENTS.eurooppa.nameEn, "Europe", "Eurooppa on Europe");
+assert.strictEqual(CONTINENTS.mk_pohjois_pohjanmaa.nameEn, "North Ostrobothnia", "Pohjois-Pohjanmaa on North Ostrobothnia");
+assert.strictEqual(CONTINENTS.mk_lappi.nameEn, "Lapland", "Lappi on Lapland");
+assert.strictEqual(CONTINENTS.mk_varsinais_suomi.nameEn, "Southwest Finland", "Varsinais-Suomi on Southwest Finland");
+// kaikilla ei-mk-kartoilla nameEn ja jokaisella kartalla kunnat/maat molemmilla kielillä
+for (const key of KEYS) assert(CONTINENTS[key].nameEn, key + ": nameEn on");
+// tehtävät englanniksi: nimet vaihtuvat, sijainnit ja määrät eivät
+{
+  const C = CONTINENTS.eurooppa, cities = CITY_DATA.eurooppa;
+  const tfi = makeTasks("seka", C, cities, rnd, "fi");
+  const ten = makeTasks("seka", C, cities, rnd, "en");
+  assert.strictEqual(tfi.length, ten.length, "sama poolikoko molemmilla kielillä");
+  assert(ten.some(t => t.name === "London"), "Lontoo on englanniksi London");
+  assert(ten.some(t => t.name === "Germany"), "Saksa on englanniksi Germany");
+  assert(!ten.some(t => t.name === "Lontoo" || t.name === "Saksa"), "ei suomalaisia eksonyymejä en-poolissa");
+  assert.strictEqual(new Set(ten.map(x => x.kind + ":" + x.name)).size, ten.length, "ei toistoja en-poolissa");
+  // kuntatehtävät ovat samat molemmilla kielillä
+  const UMk = CONTINENTS.mk_uusimaa;
+  const kfi = makeTasks("maa", UMk, null, rnd, "fi").map(t => t.name).sort();
+  const ken = makeTasks("maa", UMk, null, rnd, "en").map(t => t.name).sort();
+  assert.deepStrictEqual(kfi, ken, "kuntanimet samat molemmilla kielillä");
+}
+assert.strictEqual(cityName(["Lontoo", 51.51, -0.13, "London"], "en"), "London", "cityName en");
+assert.strictEqual(cityName(["Lontoo", 51.51, -0.13, "London"], "fi"), "Lontoo", "cityName fi");
+assert.strictEqual(cityName(["Madrid", 40.42, -3.70], "en"), "Madrid", "cityName ilman käännöstä");
+assert.strictEqual(DIFFS.helppo.nameEn, "Easy", "helppo on Easy");
+
 assert.strictEqual(fmtTime(150), "2:30", "ajan muotoilu");
 assert.strictEqual(fmtTime(65), "1:05", "ajan muotoilu, etunolla");
 assert.strictEqual(fmtTime(-3), "0:00", "ei negatiivista aikaa");
