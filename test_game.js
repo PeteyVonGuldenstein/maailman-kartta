@@ -80,6 +80,12 @@ assert(inFeature(FI, "Lappi", 25.73, 66.50), "Rovaniemi on Lapissa");
 assert(inFeature(FI, "Kemijoki", 25.73, 66.50), "Rovaniemi on Kemijoen varrella");
 assert(inFeature(FI, "Pohjanlahti", 20.0, 62.5), "Pohjanlahti osuu");
 
+// Tiet: koristekerros, ei kohteita
+assert(FI.roadsV && FI.roadsV.startsWith("M"), "Suomen kartalla valtatiet");
+assert(!FI.roadsK, "Suomen kartalla ei kantateitä");
+assert(!CONTINENTS.eurooppa.roadsV && !CONTINENTS.eurooppa.roadsK, "Euroopassa ei teitä");
+assert(!CONTINENTS.usa.roadsV, "USA:ssa ei teitä");
+
 // Yhdysvaltain osavaltiot
 const US = CONTINENTS.usa;
 assert.strictEqual(US.countries.length, 48, "48 osavaltiota");
@@ -179,6 +185,8 @@ for (const key of MK) {
   perMk[C.name] = C.countries.length;
   const names = C.countries.map(c => c.n);
   assert.strictEqual(new Set(names).size, names.length, key + ": kuntanimet uniikkeja");
+  assert(C.roadsV && C.roadsV.startsWith("M"), key + ": valtatiet piirrossa");
+  assert(C.roadsK && C.roadsK.startsWith("M"), key + ": kantatiet piirrossa");
   assert(!names.some(n => n.includes("Mariehamn")), key + ": Ahvenanmaa ei mukana");
   // kuntatehtävät: koko kuntalista, kaikki kartalla
   const t = makeTasks("maa", C, CITY_DATA[key], rnd);

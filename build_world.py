@@ -17,12 +17,20 @@ Hakemistossa on oltava:
   ne_50m_geography_regions_polys.geojson
   kunnat_2026.geojson                       (Tilastokeskus, kunta1000k_2026)
   maakunnat_2026.geojson                    (Tilastokeskus, maakunta1000k_2026)
+  tiet_1_99.geojson                         (Väylävirasto, tieosoiteverkko)
 
 Kunta- ja maakuntarajat: Tilastokeskus, kuntapohjaiset tilastointialueet
 2026 (CC BY 4.0). Haku (maakunnat samoin, typename=...maakunta1000k_2026):
   curl "https://geo.stat.fi/geoserver/tilastointialueet/wfs?service=WFS\
 &version=2.0.0&request=GetFeature&typename=tilastointialueet:kunta1000k_2026\
 &outputFormat=application/json&srsName=EPSG:4326" -o kunnat_2026.geojson
+
+Valta- ja kantatiet (koristekerros): Väylävirasto, tieosoiteverkko
+(CC BY 4.0). Suodatus ajorata<=1 antaa yhden viivan per tie:
+  curl "https://avoinapi.vaylapilvi.fi/vaylatiedot/wfs?service=WFS\
+&version=2.0.0&request=GetFeature&typeNames=tiestotiedot:tieosoiteverkko\
+&outputFormat=application/json&srsName=EPSG:4326\
+&cql_filter=tie%3C%3D99%20AND%20ajorata%3C%3D1" -o tiet_1_99.geojson
 """
 import json
 import math
@@ -607,6 +615,78 @@ def geom_lines(geom, project, w, h):
     return lines
 
 
+def load_roads(geo, eps=1e-6):
+    """Tiet numeroittain: tienumero -> murtoviivat (lon, lat).
+
+    Väyläviraston koordinaatit ovat 4-ulotteisia (lon, lat, z, m), joten
+    ne litistetään. Saman tien peräkkäiset pätkät ketjutetaan yhtenäisiksi
+    viivoiksi, jotta yksinkertaistus tiivistää suorat osuudet pätkärajojen
+    yli eikä joka pätkä aloita omaa osapolkua.
+    """
+    by_tie = {}
+    for feat in geo["features"]:
+        g = feat["geometry"]
+        if g["type"] == "LineString":
+            raw = [g["coordinates"]]
+        elif g["type"] == "MultiLineString":
+            raw = g["coordinates"]
+        else:
+            continue
+        for line in raw:
+            pts = [(p[0], p[1]) for p in line]
+            if len(pts) >= 2:
+                by_tie.setdefault(feat["properties"]["tie"], []).append(pts)
+
+    def near(a, b):
+        return abs(a[0] - b[0]) <= eps and abs(a[1] - b[1]) <= eps
+
+    for tie, segs in by_tie.items():
+        chains = [list(s) for s in segs]
+        merged = True
+        while merged:
+            merged = False
+            out = []
+            for seg in chains:
+                for c in out:
+                    if near(c[-1], seg[0]):
+                        c.extend(seg[1:])
+                    elif near(c[-1], seg[-1]):
+                        c.extend(seg[-2::-1])
+                    elif near(c[0], seg[-1]):
+                        c[:0] = seg[:-1]
+                    elif near(c[0], seg[0]):
+                        c[:0] = seg[:0:-1]
+                    else:
+                        continue
+                    merged = True
+                    break
+                else:
+                    out.append(seg)
+            chains = out
+        by_tie[tie] = chains
+    return by_tie
+
+
+def roads_path(by_tie, lo, hi, project, w, h, tol, dec):
+    """Tienumeroiden [lo, hi] tiet yhdeksi SVG-poluksi (koristekerros)."""
+    lines = []
+    for tie in sorted(by_tie):
+        if not lo <= tie <= hi:
+            continue
+        for chain in by_tie[tie]:
+            pts = [project(lon, lat) for lon, lat in chain]
+            for run in clip_line(pts, w, h):
+                run = simplify(run, tol, closed=False)
+                if len(run) < 2:
+                    continue
+                xs = [p[0] for p in run]
+                ys = [p[1] for p in run]
+                if math.hypot(max(xs) - min(xs), max(ys) - min(ys)) < 3.0:
+                    continue
+                lines.append(run)
+    return path_d(lines, close=False, dec=dec)
+
+
 def path_d(rings, close=True, dec=1):
     parts = []
     for ring in rings:
@@ -750,6 +830,7 @@ def main():
     rivers_geo = load("ne_50m_rivers_lake_centerlines.geojson")
     marine_geo = load("ne_50m_geography_marine_polys.geojson")
     regions_geo = load("ne_50m_geography_regions_polys.geojson")
+    roads_by_tie = load_roads(load("tiet_1_99.geojson"))
 
     # Krim Ukrainalle: Ukrainan ja Venäjän geometriat POV-aineistosta
     pov = load("ne10_ukr.geojson")
@@ -907,10 +988,16 @@ def main():
         }
         for sk, (_, _, pathfn) in symbol_types.items():
             world[key][sk] = pathfn(symbol_marks[sk], u)
+        # valtatiet koristeeksi Suomen karttaan
+        if key == "suomi":
+            world[key]["roadsV"] = roads_path(roads_by_tie, 1, 29,
+                                              project, W, H, tol=1.2, dec=1)
         print(f"{cfg['name']}: {W:.0f}x{H}, maita {len(targets)}, "
               f"taustaa {len(bg)}, järvirenkaita {len(lake_rings)}, "
               f"luonnonkohteita {len(features)}, symboleita " +
-              "/".join(str(len(symbol_marks[k])) for k in symbol_types))
+              "/".join(str(len(symbol_marks[k])) for k in symbol_types) +
+              (f", tiedataa {len(world[key]['roadsV']) // 1024} kt"
+               if key == "suomi" else ""))
 
     # ------------------------------------------- Suomen maakunnat ja kunnat
     # Manner-Suomen 18 maakuntaa omina karttoinaan; kunnat kohteina samassa
@@ -999,6 +1086,12 @@ def main():
         for feat in rivers_geo["features"]:
             river_draw.extend(geom_lines(feat["geometry"], project, W, H))
 
+        # valta- ja kantatiet koristeeksi; sama tiivistys kuin kuntarajoissa
+        roads_v = roads_path(roads_by_tie, 1, 29, project, W, H,
+                             tol=2.0, dec=0)
+        roads_k = roads_path(roads_by_tie, 40, 99, project, W, H,
+                             tol=2.0, dec=0)
+
         world["mk_" + slug(mk_nimi)] = {
             "name": mk_nimi, "nameEn": mf["properties"]["name"],   # virallinen käännös
             "mk": 1, "W": W, "H": H,
@@ -1007,10 +1100,12 @@ def main():
             "countries": targets, "bg": "".join(bg),
             "lakes": path_d(lake_rings),
             "rivers": path_d(river_draw, close=False),
+            "roadsV": roads_v, "roadsK": roads_k,
             "features": [],
         }
         print(f"{mk_nimi}: {W:.0f}x{H}, kuntia {len(targets)}, "
-              f"järvirenkaita {len(lake_rings)}, jokipätkiä {len(river_draw)}")
+              f"järvirenkaita {len(lake_rings)}, jokipätkiä {len(river_draw)}, "
+              f"tiedataa {(len(roads_v) + len(roads_k)) // 1024} kt")
 
     out = ("// Generoitu build_world.py:llä Natural Earth -aineistoista\n"
            "const CONTINENTS="
