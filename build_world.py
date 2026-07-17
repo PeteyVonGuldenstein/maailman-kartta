@@ -597,6 +597,47 @@ def geom_rings(geom, project, w, h, tol=SIMPLIFY_TOL):
     return rings
 
 
+def lake_draw_rings(geom, project, w, h, tol=SIMPLIFY_TOL):
+    """Järven piirtorenkaat reikineen (isot vain).
+
+    Saaret (sisärenkaat) otetaan mukaan, jotta esim. Saimaa ei piirry
+    umpilaikkuna maan päälle, jota pitkin tiet kulkevat; evenodd-täyttö
+    tekee niistä reikiä. Saari kelpaa vain, jos sen järvi piirtyy —
+    muuten evenodd maalaisi yksinäisen saaren järveksi.
+    """
+    if geom["type"] == "Polygon":
+        polys = [geom["coordinates"]]
+    elif geom["type"] == "MultiPolygon":
+        polys = geom["coordinates"]
+    else:
+        return []
+
+    def prep(ring):
+        pts = clip_ring([project(lon, lat) for lon, lat in ring], w, h)
+        if not pts:
+            return None
+        pts = simplify(pts, tol)
+        if len(pts) < 3:
+            return None
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        if math.hypot(max(xs) - min(xs), max(ys) - min(ys)) < MIN_RING_DIAG:
+            return None
+        return pts
+
+    out = []
+    for poly in polys:
+        outer = prep(poly[0])
+        if outer is None or ring_area_centroid(outer)[0] < LAKE_MIN_AREA:
+            continue
+        out.append(outer)
+        for hole in poly[1:]:
+            pts = prep(hole)
+            if pts is not None and ring_area_centroid(pts)[0] >= LAKE_MIN_AREA:
+                out.append(pts)
+    return out
+
+
 def geom_lines(geom, project, w, h):
     """Viivageometrian pätkät projisoituna, leikattuna ja yksinkertaistettuna."""
     if geom["type"] == "LineString":
@@ -912,12 +953,10 @@ def main():
             print(f"!! {cfg['name']}: maita ei löytynyt: {sorted(missing)}")
         targets.sort(key=lambda t: t["n"])
 
-        # järvet piirtoon (isot) — kaikki, ei vain kohteet
+        # järvet piirtoon (isot, saaret reikinä) — kaikki, ei vain kohteet
         lake_rings = []
         for feat in lakes_geo["features"]:
-            for ring in geom_rings(feat["geometry"], project, W, H):
-                if ring_area_centroid(ring)[0] >= LAKE_MIN_AREA:
-                    lake_rings.append(ring)
+            lake_rings.extend(lake_draw_rings(feat["geometry"], project, W, H))
 
         # luonnonkohteet
         kmpx = KM_PER_DEG_PY * (lat1 - lat0) / H
@@ -1077,9 +1116,7 @@ def main():
 
         lake_rings = []
         for feat in lakes_geo["features"]:
-            for ring in geom_rings(feat["geometry"], project, W, H):
-                if ring_area_centroid(ring)[0] >= LAKE_MIN_AREA:
-                    lake_rings.append(ring)
+            lake_rings.extend(lake_draw_rings(feat["geometry"], project, W, H))
 
         # joet vain koristeeksi (ei kohteita)
         river_draw = []
