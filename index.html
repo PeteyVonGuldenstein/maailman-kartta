@@ -47,11 +47,25 @@ window.addEventListener("error", function (e) {
   }
   #mapwrap { flex: 1; position: relative; background: #79b7d8; min-height: 0; }
   svg#map { width: 100%; height: 100%; display: block; touch-action: none; }
-  svg#mini {
+  #miniwrap {
     position: absolute; right: 8px; bottom: 8px;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+    pointer-events: none;
+  }
+  svg#mini {
     width: clamp(100px, 24vw, 170px);
     border: 2px solid #40318d; border-radius: 8px;
-    background: #79b7d8; opacity: .92; pointer-events: none;
+    background: #79b7d8; opacity: .92;
+  }
+  #scale {
+    display: flex; flex-direction: column; align-items: center; gap: 1px;
+    font-size: 11px; line-height: 1.2; font-variant-numeric: tabular-nums;
+    color: #40318d; background: rgba(242, 236, 216, .85);
+    border-radius: 6px; padding: 2px 7px;
+  }
+  #scalebar {
+    display: block; height: 6px; box-sizing: border-box;
+    border: 2px solid #40318d; border-top: none;
   }
   #stick {
     position: absolute; left: 14px; z-index: 2;
@@ -201,12 +215,15 @@ window.addEventListener("error", function (e) {
       </g>
     </g>
   </svg>
-  <svg id="mini" viewBox="0 0 1000 845">
-    <rect id="minisea" x="0" y="0" width="1000" height="845" fill="#79b7d8"/>
-    <use href="#world"/>
-    <rect id="miniview" fill="none" stroke="#e74c3c" stroke-width="14" rx="10"/>
-    <circle id="miniheli" r="20" fill="#e74c3c" stroke="#fff" stroke-width="6"/>
-  </svg>
+  <div id="miniwrap">
+    <div id="scale"><span id="scaletxt"></span><i id="scalebar"></i></div>
+    <svg id="mini" viewBox="0 0 1000 845">
+      <rect id="minisea" x="0" y="0" width="1000" height="845" fill="#79b7d8"/>
+      <use href="#world"/>
+      <rect id="miniview" fill="none" stroke="#e74c3c" stroke-width="14" rx="10"/>
+      <circle id="miniheli" r="20" fill="#e74c3c" stroke="#fff" stroke-width="6"/>
+    </svg>
+  </div>
   <div id="stick"><div id="knob"></div></div>
   <div id="toast"></div>
   <div id="count" class="hidden"></div>
@@ -782,7 +799,26 @@ if (typeof document !== "undefined") {
     sea.setAttribute("width", C.W); sea.setAttribute("height", C.H);
     heli.x = C.W / 2; heli.y = C.H / 2; heli.vx = heli.vy = 0;
     cam.x = heli.x; cam.y = heli.y;
+    updateScale();
   }
+
+  // Mittakaavajana minikartan yläpuolelle: pisin 1/2/5×10^n km, joka mahtuu
+  // ~60 %:iin minikartan leveydestä. Suhteutettu lentonäkymään (pääkarttaan,
+  // jonka lyhyempi ruutusivu on K.VIEW yksikköä), ei minikarttaan.
+  function updateScale() {
+    const w = $("mini").clientWidth;
+    const side = Math.min(svg.clientWidth, svg.clientHeight);
+    if (!w || !side) return;
+    const kmCss = K.VIEW * kmpx / side;
+    let best = 0;
+    for (let m = 1; m <= 10000; m *= 10)
+      for (const c of [1, 2, 5])
+        if (c * m / kmCss <= w * 0.6) best = c * m;
+    if (!best) { best = 1; }
+    $("scalebar").style.width = Math.round(best / kmCss) + "px";
+    $("scaletxt").textContent = best.toLocaleString("fi-FI") + " km";
+  }
+  window.addEventListener("resize", () => { if (C) updateScale(); });
 
   function markerPool() {
     const list = [];
