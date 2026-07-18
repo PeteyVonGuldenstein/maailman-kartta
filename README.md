@@ -16,4 +16,7 @@ Avaa linkki puhelimessa ja lisää peli aloitusnäytölle
 Kartat: [Natural Earth](https://www.naturalearthdata.com/) (public domain).
 Kunta- ja maakuntarajat: [Tilastokeskus](https://geo.stat.fi/),
 kuntapohjaiset tilastointialueet 2026 (CC BY 4.0).
-Generointi: `build_world.py`, testit: `node test_game.js`.
+Suomen järvet: [SYKE](https://www.syke.fi/avointieto) Ranta10, rantaviiva
+1:10 000 (CC BY 4.0). Valta- ja kantatiet: [Väylävirasto](https://vayla.fi/),
+tieosoiteverkko (CC BY 4.0).
+Generointi: `build_world.py` ja `fetch_syke_lakes.py`, testit: `node test_game.js`.

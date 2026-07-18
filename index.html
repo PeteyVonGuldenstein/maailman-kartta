@@ -85,6 +85,7 @@ window.addEventListener("error", function (e) {
   .bgland { fill: #d8d2c0; stroke: #bdb49e; stroke-width: 1; }
   .country { fill: #f2ecd8; stroke: #a19678; stroke-width: 1; transition: fill .4s; }
   .country.found { fill: #b9dfa5; }
+  .border { fill: none; stroke: #5e4d2b; stroke-linejoin: round; stroke-linecap: round; }
   .lake { fill: #79b7d8; stroke: #5a9cc0; stroke-width: .6; fill-rule: evenodd; }
   .river { fill: none; stroke: #5a9cc0; stroke-width: 1.3; stroke-linecap: round; }
   .roadv { fill: none; stroke: #b5533c; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
@@ -191,6 +192,7 @@ window.addEventListener("error", function (e) {
       <path id="canyons" class="canyon"/>
       <path id="roadsk" class="roadk"/>
       <path id="roadsv" class="roadv"/>
+      <path id="borders" class="border"/>
       <g id="dots"></g>
       <g id="labels"></g>
     </g>
@@ -786,6 +788,10 @@ if (typeof document !== "undefined") {
     $("roadsk").style.strokeWidth = (0.9 * K.U).toFixed(2);
     $("roadsv").setAttribute("d", C.roadsV || "");
     $("roadsv").style.strokeWidth = (1.4 * K.U).toFixed(2);
+    // maakunnissa kuntarajat omana vahvana kerroksena järvien PÄÄLLE:
+    // kuntaraja kulkee usein vesistössä, jolloin järvi peittäisi sen alta
+    $("borders").setAttribute("d", C.mk ? C.countries.map(c => c.d).join("") : "");
+    $("borders").style.strokeWidth = (1.2 * K.U).toFixed(2);
     for (const id of ["mounts", "deserts", "plateaus", "forests", "wetlands", "canyons"]) {
       $(id).setAttribute("d", C[id] || "");
       $(id).style.strokeWidth = (1.2 * K.U).toFixed(2);

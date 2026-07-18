@@ -1,6 +1,6 @@
 // Maailman kartta -pelin service worker: verkko ensin, välimuisti varalle.
 // Nimen versionumeron nosto pakottaa vanhan välimuistin tyhjennyksen.
-const CACHE = "maailman-kartta-v9";
+const CACHE = "maailman-kartta-v10";
 const CORE = ["./", "index.html", "world_data.js", "manifest.json",
               "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 

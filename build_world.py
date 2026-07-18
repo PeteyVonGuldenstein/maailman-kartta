@@ -13,6 +13,7 @@ Hakemistossa on oltava:
   ne_50m_admin_1.geojson                    (ne_50m_admin_1_states_provinces)
   ne_50m_lakes.geojson
   ne_50m_rivers_lake_centerlines.geojson
+  syke_jarvet.geojson                       (SYKE Ranta10, Suomen järvet)
   ne_50m_geography_marine_polys.geojson
   ne_50m_geography_regions_polys.geojson
   kunnat_2026.geojson                       (Tilastokeskus, kunta1000k_2026)
@@ -31,6 +32,11 @@ Valta- ja kantatiet (koristekerros): Väylävirasto, tieosoiteverkko
 &version=2.0.0&request=GetFeature&typeNames=tiestotiedot:tieosoiteverkko\
 &outputFormat=application/json&srsName=EPSG:4326\
 &cql_filter=tie%3C%3D99%20AND%20ajorata%3C%3D1" -o tiet_1_99.geojson
+
+Suomen järvet (Suomi- ja maakuntakarttojen piirtovesi): SYKE Ranta10,
+rantaviiva 1:10 000 (CC BY 4.0). Lataa ja esiyksinkertaista fetch_syke_lakes.py:llä:
+  python3 fetch_syke_lakes.py syke_jarvet.geojson
+Muut maanosat käyttävät edelleen ne_50m_lakes.geojson-aineistoa.
 """
 import json
 import math
@@ -597,7 +603,7 @@ def geom_rings(geom, project, w, h, tol=SIMPLIFY_TOL):
     return rings
 
 
-def lake_draw_rings(geom, project, w, h, tol=SIMPLIFY_TOL):
+def lake_draw_rings(geom, project, w, h, tol=SIMPLIFY_TOL, min_area=LAKE_MIN_AREA):
     """Järven piirtorenkaat reikineen (isot vain).
 
     Saaret (sisärenkaat) otetaan mukaan, jotta esim. Saimaa ei piirry
@@ -628,12 +634,12 @@ def lake_draw_rings(geom, project, w, h, tol=SIMPLIFY_TOL):
     out = []
     for poly in polys:
         outer = prep(poly[0])
-        if outer is None or ring_area_centroid(outer)[0] < LAKE_MIN_AREA:
+        if outer is None or ring_area_centroid(outer)[0] < min_area:
             continue
         out.append(outer)
         for hole in poly[1:]:
             pts = prep(hole)
-            if pts is not None and ring_area_centroid(pts)[0] >= LAKE_MIN_AREA:
+            if pts is not None and ring_area_centroid(pts)[0] >= min_area:
                 out.append(pts)
     return out
 
@@ -868,6 +874,9 @@ def main():
     admin1_geo = (load("ne_50m_admin_1.geojson")
                   if any(c.get("states") for c in CONTINENTS.values()) else None)
     lakes_geo = load("ne_50m_lakes.geojson")
+    # Suomen ja maakuntien piirtovesi tarkasta kotimaisesta aineistosta;
+    # muut maanosat ja haettavat järvikohteet käyttävät NE-aineistoa
+    fin_lakes_geo = load("syke_jarvet.geojson")
     rivers_geo = load("ne_50m_rivers_lake_centerlines.geojson")
     marine_geo = load("ne_50m_geography_marine_polys.geojson")
     regions_geo = load("ne_50m_geography_regions_polys.geojson")
@@ -953,10 +962,15 @@ def main():
             print(f"!! {cfg['name']}: maita ei löytynyt: {sorted(missing)}")
         targets.sort(key=lambda t: t["n"])
 
-        # järvet piirtoon (isot, saaret reikinä) — kaikki, ei vain kohteet
+        # järvet piirtoon (isot, saaret reikinä) — kaikki, ei vain kohteet;
+        # Suomessa tarkka SYKE-aineisto (väljempi tiivistys, ettei tiedosto paisu
+        # saarien myötä), muualla NE
+        lake_src = fin_lakes_geo if key == "suomi" else lakes_geo
+        lk_tol, lk_min = (1.5, 6.0) if key == "suomi" else (SIMPLIFY_TOL, LAKE_MIN_AREA)
         lake_rings = []
-        for feat in lakes_geo["features"]:
-            lake_rings.extend(lake_draw_rings(feat["geometry"], project, W, H))
+        for feat in lake_src["features"]:
+            lake_rings.extend(lake_draw_rings(feat["geometry"], project, W, H,
+                                              tol=lk_tol, min_area=lk_min))
 
         # luonnonkohteet
         kmpx = KM_PER_DEG_PY * (lat1 - lat0) / H
@@ -1114,9 +1128,12 @@ def main():
             if rings:
                 bg.append(path_d(rings))
 
+        # väljempi tiivistys ja kokonaislukukoordinaatit (kuten kuntarajoilla),
+        # ettei tiedosto paisu tuhansien saarien myötä
         lake_rings = []
-        for feat in lakes_geo["features"]:
-            lake_rings.extend(lake_draw_rings(feat["geometry"], project, W, H))
+        for feat in fin_lakes_geo["features"]:
+            lake_rings.extend(lake_draw_rings(feat["geometry"], project, W, H,
+                                              tol=2.5, min_area=8.0))
 
         # joet vain koristeeksi (ei kohteita)
         river_draw = []
@@ -1135,7 +1152,7 @@ def main():
             "lon0": bbox[0], "lon1": bbox[1], "lat0": bbox[2], "lat1": bbox[3],
             "cos": round(cos, 6),
             "countries": targets, "bg": "".join(bg),
-            "lakes": path_d(lake_rings),
+            "lakes": path_d(lake_rings, dec=0),
             "rivers": path_d(river_draw, close=False),
             "roadsV": roads_v, "roadsK": roads_k,
             "features": [],
