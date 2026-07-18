@@ -1128,12 +1128,13 @@ def main():
             if rings:
                 bg.append(path_d(rings))
 
-        # väljempi tiivistys ja kokonaislukukoordinaatit (kuten kuntarajoilla),
-        # ettei tiedosto paisu tuhansien saarien myötä
+        # väljempi tiivistys ja kokonaislukukoordinaatit (kuten kuntarajoilla);
+        # korkea min_area karsii pienet järvet ja saaret, ettei kartta ruuhkaudu
+        # eikä ruudunpäivitys hidastu puhelimissa (tuhansia saaria oli liikaa)
         lake_rings = []
         for feat in fin_lakes_geo["features"]:
             lake_rings.extend(lake_draw_rings(feat["geometry"], project, W, H,
-                                              tol=2.5, min_area=8.0))
+                                              tol=3.0, min_area=30.0))
 
         # joet vain koristeeksi (ei kohteita)
         river_draw = []
