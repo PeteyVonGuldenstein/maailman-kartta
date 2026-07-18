@@ -61,7 +61,7 @@ window.addEventListener("error", function (e) {
     display: flex; flex-direction: column; align-items: center; gap: 1px;
     font-size: 11px; line-height: 1.2; font-variant-numeric: tabular-nums;
     color: #40318d; background: rgba(242, 236, 216, .85);
-    border-radius: 6px; padding: 2px 7px;
+    border-radius: 6px; padding: 2px 0;
   }
   #scalebar {
     display: block; height: 6px; box-sizing: border-box;
@@ -805,21 +805,22 @@ if (typeof document !== "undefined") {
     updateScale();
   }
 
-  // Mittakaavajana minikartan yläpuolelle: pisin 1/2/5×10^n km, joka mahtuu
-  // ~60 %:iin minikartan leveydestä. Suhteutettu lentonäkymään (pääkarttaan,
-  // jonka lyhyempi ruutusivu on K.VIEW yksikköä), ei minikarttaan.
+  // Mittakaavajana minikartan yläpuolelle: aina minikartan levyinen, lukema
+  // kertoo montako kilometriä se leveys vastaa. Suhteutettu lentonäkymään
+  // (pääkarttaan, jonka lyhyempi ruutusivu on K.VIEW yksikköä), ei minikarttaan.
   function updateScale() {
+    // huom: offsetWidth on undefined SVG-elementille — käytä clientWidthiä
     const w = $("mini").clientWidth;
     const side = Math.min(svg.clientWidth, svg.clientHeight);
-    if (!w || !side) return;
-    const kmCss = K.VIEW * kmpx / side;
-    let best = 0;
-    for (let m = 1; m <= 10000; m *= 10)
-      for (const c of [1, 2, 5])
-        if (c * m / kmCss <= w * 0.6) best = c * m;
-    if (!best) { best = 1; }
-    $("scalebar").style.width = Math.round(best / kmCss) + "px";
-    $("scaletxt").textContent = best.toLocaleString("fi-FI") + " km";
+    // asettelu voi olla vielä kesken heti latauksessa (esim. offline-tiedosto
+    // suoraan avattuna, jolloin resize-tapahtumaa ei tule): yritä uudelleen
+    if (!w || !side) { requestAnimationFrame(updateScale); return; }
+    const kmCss = K.VIEW * kmpx / side;   // km / css-px lentonäkymässä
+    const km = w * kmCss;                  // minikartan leveyttä vastaava matka
+    const mag = Math.pow(10, Math.floor(Math.log10(km)) - 1);   // 2 merkitsevää
+    const rounded = Math.max(1, Math.round(km / mag) * mag);
+    $("scalebar").style.width = w + "px";
+    $("scaletxt").textContent = rounded.toLocaleString("fi-FI") + " km";
   }
   window.addEventListener("resize", () => { if (C) updateScale(); });
 
