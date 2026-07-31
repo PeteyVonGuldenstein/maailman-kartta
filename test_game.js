@@ -4,21 +4,23 @@ const assert = require("assert");
 
 const dir = "/root/euroopan-kartta";
 const worldData = fs.readFileSync(dir + "/world_data.js", "utf8");
+const kuntakeskukset = fs.readFileSync(dir + "/kuntakeskukset.js", "utf8");
 const html = fs.readFileSync(dir + "/index.html", "utf8");
 const m = html.match(/<script>\n("use strict";[\s\S]*?)<\/script>/);
 assert(m, "peliskripti löytyy HTML:stä");
 
 // Ajetaan data + peliskripti; document ei ole määritelty, joten UI-lohko ohitetaan
 globalThis.assert = assert;
-(0, eval)(worldData + m[1] + `
+(0, eval)(worldData + kuntakeskukset + m[1] + `
 // --- testit samassa scopessa ---
 const KEYS = ["suomi","eurooppa","aasia","afrikka","pohjois_amerikka","usa","etela_amerikka","oseania"];
 let seed = 42;
 const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
 
-// apurit: aluekohtaiset toleranssit kuten pelissä (km × kokokerroin)
+// apurit: aluekohtaiset toleranssit kuten pelissä (km × kokokerroin;
+// maakunnissa kerroin on 1,5-kertainen, ks. setContinent)
 function tol(C) {
-  const k = kmPerPx(C), s = sizeScale(C, CONTINENTS.eurooppa);
+  const k = kmPerPx(C), s = sizeScale(C, CONTINENTS.eurooppa) * (C.mk ? 1.5 : 1);
   return { coast: 35 * s / k, ctr: 60 * s / k, line: 50 * s / k, hit: 85 * s / k };
 }
 function country(C, n) { return C.countries.find(c => c.n === n); }
@@ -173,12 +175,11 @@ for (const key of ["eurooppa", "aasia", "afrikka", "pohjois_amerikka", "etela_am
 // Suomen maakunnat: 18 karttaa, kunnat kohteina kuten maat
 const MK = Object.keys(CONTINENTS).filter(k => k.startsWith("mk_"));
 assert.strictEqual(MK.length, 18, "18 maakuntaa");
-let kunnat = 0;
+let kunnat = 0, keskukset = 0;
 const perMk = {};
 for (const key of MK) {
   const C = CONTINENTS[key];
   assert(C.mk, key + ": mk-lippu");
-  assert(!CITY_DATA[key], key + ": ei kaupunkilistoja");
   assert(C.countries.length >= 6, key + ": vähintään 6 kuntaa");
   assert.strictEqual(C.features.length, 0, key + ": ei luonnonkohteita");
   kunnat += C.countries.length;
@@ -196,8 +197,51 @@ for (const key of MK) {
     assert(task.x >= 0 && task.x <= C.W && task.y >= 0 && task.y <= C.H,
       key + ": kunta kartalla: " + task.name);
   }
+  // kuntakeskukset (kuntakeskukset.js): jokaiselle kunnalle täsmälleen yksi
+  // piste jonkin maakunnan kunnan sisällä. Keskuksen nimi ei aina ole kunnan
+  // nimi (Rautjärven keskus on Simpele), joten pistettä ei voi sitoa nimellä
+  // omaan kuntaansa — se tarkistetaan generoinnissa kuntanumeron kautta.
+  const ck = CITY_DATA[key];
+  assert(ck && ck.pk, key + ": kuntakeskuslista");
+  assert(!ck.kau, key + ": maakunnalla ei ole pikkukaupunkilistaa");
+  assert.strictEqual(ck.pk.length, C.countries.length,
+    key + ": kuntakeskus joka kunnalle");
+  const knames = ck.pk.map(c => c[0]);
+  assert.strictEqual(new Set(knames).size, knames.length,
+    key + ": kuntakeskusten nimet uniikkeja");
+  keskukset += ck.pk.length;
+  const kt = tol(C);
+  for (const c of ck.pk) {
+    const [x, y] = project(c[2], c[1], C);
+    assert(x >= 0 && x <= C.W && y >= 0 && y <= C.H,
+      key + ": kuntakeskus kartalla: " + c[0]);
+    assert(C.countries.some(k => pointInArea(x, y, k, kt.coast, kt.ctr)),
+      key + ": kuntakeskus osuu kuntaan: " + c[0]);
+  }
+  // pelimuodot: Kuntakeskukset (pk) ja Sekoitus (kunnat + keskukset)
+  const tpk = makeTasks("pk", C, ck, rnd);
+  assert.strictEqual(tpk.length, ck.pk.length, key + "/pk: kaikki keskukset tehtävinä");
+  assert(tpk.every(x => x.kind === "city"), key + "/pk: keskus on pistekohde");
+  assert.strictEqual(makeTasks("seka", C, ck, rnd).length,
+    C.countries.length + ck.pk.length, key + "/seka: kunnat ja keskukset");
 }
 assert.strictEqual(kunnat, 292, "Manner-Suomessa 292 kuntaa");
+assert.strictEqual(keskukset, 292, "292 kuntakeskusta");
+// omannimiset kuntakeskukset: kohde on taajama, ei kunta
+{
+  const keskus = (k, n) => CITY_DATA[k].pk.find(c => c[0] === n);
+  const EK = CONTINENTS.mk_etela_karjala, t = tol(EK);
+  const simpele = keskus("mk_etela_karjala", "Simpele");
+  assert(simpele, "Rautjärven kuntakeskus on Simpele");
+  const [sx, sy] = project(simpele[2], simpele[1], EK);
+  assert(pointInArea(sx, sy, country(EK, "Rautjärvi"), t.coast, t.ctr),
+    "Simpele sijaitsee Rautjärvellä");
+  assert(!keskus("mk_etela_karjala", "Rautjärvi"),
+    "Rautjärvi ei ole enää kuntakeskuksen nimenä");
+  assert(keskus("mk_paijat_hame", "Kausala"), "Iitin kuntakeskus on Kausala");
+  assert(keskus("mk_pirkanmaa", "Toijala"), "Akaan kuntakeskus on Toijala");
+  assert(keskus("mk_uusimaa", "Helsinki"), "Helsingin kuntakeskus on Helsinki");
+}
 assert.strictEqual(perMk["Uusimaa"], 26, "Uudellamaalla 26 kuntaa");
 assert.strictEqual(perMk["Kymenlaakso"], 6, "Kymenlaaksossa 6 kuntaa");
 assert.strictEqual(perMk["Pohjois-Pohjanmaa"], 30, "Pohjois-Pohjanmaalla 30 kuntaa");
@@ -219,6 +263,17 @@ assert.deepStrictEqual(Object.keys(STR.fi), Object.keys(STR.en), "STR: samat ava
 for (const k of Object.keys(STR.fi))
   assert.strictEqual(typeof STR.fi[k], typeof STR.en[k], "STR: sama tyyppi: " + k);
 assert.deepStrictEqual(Object.keys(STR.fi.modes), MODE_KEYS, "STR: pelimuotoavaimet");
+// Sääntötekstit luetaan sääntötauluista, jotta luvut eivät eriydy säännöistä
+for (const l of ["fi", "en"]) {
+  const i2 = STR[l].intro2(DIFFS), cd = STR[l].challengeDesc(CHALLENGE);
+  for (const d of Object.keys(DIFFS))
+    assert(i2.includes(String(DIFFS[d].every)), l + ": intro2 kertoo putkibonuksen välin: " + d);
+  assert(cd.includes(String(CHALLENGE.per)) && cd.includes(String(CHALLENGE.clear)) &&
+    cd.includes(fmtTime(CHALLENGE.start)), l + ": haasteen kuvaus kertoo säännöt");
+}
+assert.strictEqual(ordEn(15), "15th", "järjestysluku 15th");
+assert.strictEqual(ordEn(21), "21st", "järjestysluku 21st");
+assert.strictEqual(ordEn(12), "12th", "järjestysluku 12th");
 function en(C, n) { const c = C.countries.find(c => c.n === n); return c && (c.e || c.n); }
 function enFeat(C, n) { const f = C.features.find(f => f.n === n); return f && (f.e || f.n); }
 assert.strictEqual(en(CONTINENTS.eurooppa, "Saksa"), "Germany", "Saksa on Germany");

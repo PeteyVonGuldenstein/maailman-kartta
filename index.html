@@ -52,10 +52,19 @@ window.addEventListener("error", function (e) {
     display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
     pointer-events: none;
   }
-  svg#mini {
-    width: clamp(100px, 24vw, 170px);
-    border: 2px solid #40318d; border-radius: 8px;
-    background: #79b7d8; opacity: .92;
+  /* Minikartta on kaksi päällekkäistä SVG:tä: raskas karttakerros (#mini)
+     ja sen päällä kevyt merkkikerros (#miniov, kehys + kopterin piste).
+     Erillisenä kerroksena merkit voi siirtää joka ruudunpäivityksellä
+     ilman että selain piirtää karttapolkuja uudelleen. */
+  #minibox {
+    position: relative; width: clamp(100px, 24vw, 170px);
+    border: 2px solid #40318d; border-radius: 8px; overflow: hidden;
+    background: #79b7d8;
+  }
+  svg#mini { display: block; width: 100%; opacity: .92; }
+  svg#miniov {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    opacity: .92; pointer-events: none;
   }
   #scale {
     display: flex; flex-direction: column; align-items: center; gap: 1px;
@@ -171,10 +180,12 @@ window.addEventListener("error", function (e) {
 </style>
 </head>
 <body>
+<!-- Näkyvät tekstit tulevat STR-sanakirjasta (applyLang); tässä vain rakenne.
+     Poikkeus on #jswarn, jonka on näyttävä silloinkin, kun JS ei käynnisty. -->
 <div id="hud">
-  <div id="task">Maailman kartta</div>
+  <div id="task"></div>
   <div id="stats"></div>
-  <button id="quitbtn" aria-label="Lopeta peli">✕</button>
+  <button id="quitbtn">✕</button>
 </div>
 <div id="mapwrap">
   <svg id="map" viewBox="0 0 1000 845" preserveAspectRatio="xMidYMid meet">
@@ -219,12 +230,16 @@ window.addEventListener("error", function (e) {
   </svg>
   <div id="miniwrap">
     <div id="scale"><span id="scaletxt"></span><i id="scalebar"></i></div>
-    <svg id="mini" viewBox="0 0 1000 845">
-      <rect id="minisea" x="0" y="0" width="1000" height="845" fill="#79b7d8"/>
-      <use href="#world"/>
-      <rect id="miniview" fill="none" stroke="#e74c3c" stroke-width="14" rx="10"/>
-      <circle id="miniheli" r="20" fill="#e74c3c" stroke="#fff" stroke-width="6"/>
-    </svg>
+    <div id="minibox">
+      <svg id="mini" viewBox="0 0 1000 845">
+        <rect id="minisea" x="0" y="0" width="1000" height="845" fill="#79b7d8"/>
+        <use href="#world"/>
+      </svg>
+      <svg id="miniov" viewBox="0 0 1000 845">
+        <rect id="miniview" fill="none" stroke="#e74c3c" stroke-width="14" rx="10"/>
+        <circle id="miniheli" r="20" fill="#e74c3c" stroke="#fff" stroke-width="6"/>
+      </svg>
+    </div>
   </div>
   <div id="stick"><div id="knob"></div></div>
   <div id="toast"></div>
@@ -235,43 +250,44 @@ window.addEventListener("error", function (e) {
   <div class="frame">
     <button id="langbtn">🌐 English</button>
     <div class="copter">🚁</div>
-    <h1 id="title">MAAILMAN KARTTA</h1>
-    <p id="intro1">Lennä helikopterilla etsimääsi kohteeseen tatilla tai sormella karttaa koskettamalla. Kun olet kohteen päällä, <b>tuplanapauta tattia</b>, niin kopteri laskeutuu ja paikka tarkistetaan. Tietokoneella ohjaat nuolinäppäimillä ja laskeudut välilyönnillä.</p>
-    <p id="intro2">Kello käy: oikea löytö antaa <b>lisäaikaa</b> ja väärä paikka <b>vie sitä</b>. Ekstrabonuksen saa helpolla tasolla joka 10., keskitasolla joka 15. ja vaikealla joka 20. löydöstä. Lähtöaika ja sekuntimäärät riippuvat vaikeustasosta. Peli päättyy, kun kaikki kohteet on löydetty tai aika loppuu.</p>
+    <h1 id="title"></h1>
+    <p id="intro1"></p>
+    <p id="intro2"></p>
     <p id="jswarn" style="color:#ffc4b8;font-weight:600">⚠️ Pelin koodi ei ole käynnistynyt, koska tämä katselin ei suorita JavaScriptiä. Avaa tiedosto Chromella: Chrome-valikko ⋮ → Lataukset. Sovellusten esikatselu ja HTML-katselin eivät kelpaa. (The game code did not start because this viewer does not run JavaScript — open the file in Chrome.)</p>
-    <p id="choosearea">Valitse alue:</p>
+    <p id="choosearea"></p>
     <div class="conts" id="contbtns"></div>
     <div class="conts hidden" id="mkbtns"></div>
-    <p id="choosediff">Valitse vaikeustaso:</p>
+    <p id="choosediff"></p>
     <div class="diffs" id="diffbtns"></div>
-    <button id="learnbtn"><span id="lrn-t">🎓 Opettelu</span><span class="best" id="lrn-d">Ei aikarajaa, ennätyksiä ei tallenneta ja löydettyjen nimet jäävät kartalle</span></button>
-    <p id="choosemode">Valitse pelimuoto:</p>
+    <button id="learnbtn"><span id="lrn-t"></span><span class="best" id="lrn-d"></span></button>
+    <p id="choosemode"></p>
     <div class="modes">
-      <button data-mode="pk"><span id="lbl-pk">Pääkaupungit</span><span class="best" id="best-pk"></span></button>
-      <button data-mode="kau"><span id="lbl-kau">Suurkaupungit</span><span class="best" id="best-kau"></span></button>
-      <button data-mode="opk"><span id="lbl-opk">Pääkaupungit</span><span class="best" id="best-opk"></span></button>
-      <button data-mode="maa"><span id="lbl-maa">Maat</span><span class="best" id="best-maa"></span></button>
-      <button data-mode="luonto"><span id="lbl-luonto">Luonnonkohteet</span><span class="best" id="best-luonto"></span></button>
-      <button data-mode="seka" style="grid-column:1/-1"><span id="lbl-seka">Sekoitus</span><span class="best" id="best-seka"></span></button>
+      <button data-mode="pk"><span id="lbl-pk"></span><span class="best" id="best-pk"></span></button>
+      <button data-mode="kau"><span id="lbl-kau"></span><span class="best" id="best-kau"></span></button>
+      <button data-mode="opk"><span id="lbl-opk"></span><span class="best" id="best-opk"></span></button>
+      <button data-mode="maa"><span id="lbl-maa"></span><span class="best" id="best-maa"></span></button>
+      <button data-mode="luonto"><span id="lbl-luonto"></span><span class="best" id="best-luonto"></span></button>
+      <button data-mode="seka" style="grid-column:1/-1"><span id="lbl-seka"></span><span class="best" id="best-seka"></span></button>
     </div>
-    <button id="challengebtn"><span id="ch-t">🏆 Haaste</span><span class="best"><span id="ch-d">Kaikki maanosat putkeen, 15 kohdetta kustakin, läpäisystä +20 s. Aikaa 1:50 · +5 s / −15 s</span><span id="best-haaste"></span></span></button>
+    <button id="challengebtn"><span id="ch-t"></span><span class="best"><span id="ch-d"></span><span id="best-haaste"></span></span></button>
   </div>
 </div>
 
 <div id="end" class="overlay hidden">
   <div class="frame">
     <div class="copter">🏆</div>
-    <h2>Kierros valmis!</h2>
+    <h2></h2>
     <p id="endscore" style="font-size:21px;color:#fff"></p>
     <p id="endbest"></p>
     <div class="modes">
-      <button class="big" id="again">Pelaa uudestaan</button>
-      <button class="big" id="tomenu" style="background:#5442b0;border-color:#7869c4">Valikkoon</button>
+      <button class="big" id="again"></button>
+      <button class="big" id="tomenu" style="background:#5442b0;border-color:#7869c4"></button>
     </div>
   </div>
 </div>
 
 <script src="world_data.js"></script>
+<script src="kuntakeskukset.js"></script>
 <script>
 "use strict";
 /* ==================== Pelilogiikka (puhtaat funktiot) ==================== */
@@ -491,6 +507,11 @@ const CITY_DATA = {
   }
 };
 
+// Maakuntien kuntakeskukset tulevat generoidusta kuntakeskukset.js:stä
+// (Wikidata) samassa muodossa kuin käsin kootut kaupunkilistat, jolloin
+// mk-kartat käyttävät tavallista kaupunkikoneistoa.
+if (typeof KUNTAKESKUKSET !== "undefined") Object.assign(CITY_DATA, KUNTAKESKUKSET);
+
 function pointInPoly(x, y, flat) {
   let inside = false;
   for (let i = 0, j = flat.length - 2; i < flat.length; j = i, i += 2) {
@@ -547,10 +568,15 @@ const cityName = (c, lang) => (lang === "en" && c[3]) || c[0];
 const placeName = (o, lang) => (lang === "en" && o.e) || o.n;
 const contName = (C, lang) => (lang === "en" && C.nameEn) || C.name;
 
+// Kaupunkilistat aina samassa muodossa: maakunnilla on vain pk-lista
+// (kuntakeskukset) ja Suomen ulkopuolisilla alueilla ei opk-listaa
+const cityLists = c => ({ pk: (c && c.pk) || [], kau: (c && c.kau) || [],
+                          opk: c && c.opk });
+
 // Arpoo kierroksen tehtävät maanosan, pelimuodon ja kielen mukaan
 function makeTasks(mode, C, cities, rnd, lang) {
   rnd = rnd || Math.random;
-  cities = cities || { pk: [], kau: [] };   // maakunnilla ei ole kaupunkilistoja
+  cities = cityLists(cities);
   const cityTask = c => {
     const [x, y] = project(c[2], c[1], C);
     return { kind: "city", name: cityName(c, lang), x, y };
@@ -590,28 +616,39 @@ function makeChallengeTasks(C, cities, rnd, lang) {
   return makeTasks("seka", C, cities, rnd, lang).slice(0, CHALLENGE.per);
 }
 
-// Käyttöliittymätekstit; molemmissa kielissä on oltava samat avaimet
+// Käyttöliittymätekstit; molemmissa kielissä on oltava samat avaimet.
+// Säännöistä kertovat tekstit ovat funktioita, jotka lukevat luvut
+// DIFFS- ja CHALLENGE-tauluista — muuten ne eriytyisivät säännöistä.
 const MODE_KEYS = ["pk", "kau", "opk", "maa", "luonto", "seka"];
+const ordEn = n => {
+  const t = n % 100, d = n % 10;
+  return n + (t >= 11 && t <= 13 ? "th"
+    : d === 1 ? "st" : d === 2 ? "nd" : d === 3 ? "rd" : "th");
+};
 const STR = {
   fi: {
     title: "MAAILMAN KARTTA",
     worldMap: "Maailman kartta",
     intro1: "Lennä helikopterilla etsimääsi kohteeseen tatilla tai sormella karttaa koskettamalla. Kun olet kohteen päällä, <b>tuplanapauta tattia</b>, niin kopteri laskeutuu ja paikka tarkistetaan. Tietokoneella ohjaat nuolinäppäimillä ja laskeudut välilyönnillä.",
-    intro2: "Kello käy: oikea löytö antaa <b>lisäaikaa</b> ja väärä paikka <b>vie sitä</b>. Ekstrabonuksen saa helpolla tasolla joka 10., keskitasolla joka 15. ja vaikealla joka 20. löydöstä. Lähtöaika ja sekuntimäärät riippuvat vaikeustasosta. Peli päättyy, kun kaikki kohteet on löydetty tai aika loppuu.",
+    intro2: d => "Kello käy: oikea löytö antaa <b>lisäaikaa</b> ja väärä paikka <b>vie sitä</b>. " +
+      `Ekstrabonuksen saa helpolla tasolla joka ${d.helppo.every}., keskitasolla joka ` +
+      `${d.keskitaso.every}. ja vaikealla joka ${d.vaikea.every}. löydöstä. ` +
+      "Lähtöaika ja sekuntimäärät riippuvat vaikeustasosta. Peli päättyy, kun kaikki kohteet on löydetty tai aika loppuu.",
     chooseArea: "Valitse alue:", chooseDiff: "Valitse vaikeustaso:", chooseMode: "Valitse pelimuoto:",
     regions: "Maakunnat ▾",
     learnTitle: "🎓 Opettelu",
     learnDesc: "Ei aikarajaa, ennätyksiä ei tallenneta ja löydettyjen nimet jäävät kartalle",
     challengeTitle: "🏆 Haaste",
-    challengeDesc: "Kaikki maanosat putkeen, 15 kohdetta kustakin, läpäisystä +20 s. Aikaa 1:50 · +5 s / −15 s",
+    challengeDesc: c => `Kaikki maanosat putkeen, ${c.per} kohdetta kustakin, ` +
+      `läpäisystä +${c.clear} s. Aikaa ${fmtTime(c.start)} · +${c.bonus} s / −${c.penalty} s`,
     again: "Pelaa uudestaan", toMenu: "Valikkoon", quit: "Lopeta peli",
     modes: { pk: "Pääkaupungit", kau: "Suurkaupungit", opk: "Pääkaupungit",
              maa: "Maat", luonto: "Luonnonkohteet", seka: "Sekoitus" },
     modeOv: { suomi: { pk: "Isot kaupungit", kau: "Pienet kaupungit" },
               usa: { pk: "Suurkaupungit", kau: "Muut kaupungit", maa: "Osavaltiot" } },
-    municipalities: "Kunnat",
+    municipalities: "Kunnat", centres: "Kuntakeskukset",
     findCity: "Etsi kaupunki: ", findCountry: "Etsi maa: ", findState: "Etsi osavaltio: ",
-    findKunta: "Etsi kunta: ", find: "Etsi: ",
+    findKunta: "Etsi kunta: ", findCentre: "Etsi kuntakeskus: ", find: "Etsi: ",
     prepare: "Valmistaudu: ",
     continent: "maanosa",
     learnWord: "opettelu",
@@ -636,21 +673,25 @@ const STR = {
     title: "WORLD MAP",
     worldMap: "World Map",
     intro1: "Fly the helicopter to the requested place with the joystick or by touching the map. When you are over the target, <b>double-tap the joystick</b> to land and check the location. On a computer, steer with the arrow keys and land with the space bar.",
-    intro2: "The clock is running: a correct find adds <b>extra time</b> and a wrong place <b>costs it</b>. You get a streak bonus every 10th find on easy, every 15th on medium and every 20th on hard. The starting time and seconds depend on the difficulty. The game ends when every target is found or time runs out.",
+    intro2: d => "The clock is running: a correct find adds <b>extra time</b> and a wrong place <b>costs it</b>. " +
+      `You get a streak bonus every ${ordEn(d.helppo.every)} find on easy, every ` +
+      `${ordEn(d.keskitaso.every)} on medium and every ${ordEn(d.vaikea.every)} on hard. ` +
+      "The starting time and seconds depend on the difficulty. The game ends when every target is found or time runs out.",
     chooseArea: "Choose an area:", chooseDiff: "Choose a difficulty:", chooseMode: "Choose a game mode:",
     regions: "Regions ▾",
     learnTitle: "🎓 Practice",
     learnDesc: "No time limit, no records, and the names of found places stay on the map",
     challengeTitle: "🏆 Challenge",
-    challengeDesc: "All continents in a row, 15 targets each, +20 s for clearing one. Time 1:50 · +5 s / −15 s",
+    challengeDesc: c => `All continents in a row, ${c.per} targets each, ` +
+      `+${c.clear} s for clearing one. Time ${fmtTime(c.start)} · +${c.bonus} s / −${c.penalty} s`,
     again: "Play again", toMenu: "Menu", quit: "Quit game",
     modes: { pk: "Capitals", kau: "Major cities", opk: "State capitals",
              maa: "Countries", luonto: "Natural features", seka: "Mixed" },
     modeOv: { suomi: { pk: "Major cities", kau: "Small towns" },
               usa: { pk: "Major cities", kau: "Other cities", maa: "States" } },
-    municipalities: "Municipalities",
+    municipalities: "Municipalities", centres: "Municipal centres",
     findCity: "Find the city: ", findCountry: "Find the country: ", findState: "Find the state: ",
-    findKunta: "Find the municipality: ", find: "Find: ",
+    findKunta: "Find the municipality: ", findCentre: "Find the centre: ", find: "Find: ",
     prepare: "Get ready: ",
     continent: "continent",
     learnWord: "practice",
@@ -707,7 +748,9 @@ if (typeof document !== "undefined") {
   let lang = saved.lang === "en" ? "en" : "fi";
   const T = k => STR[lang][k];
   function modeName(m) {
-    if (C && C.mk && m === "maa") return T("municipalities");   // maakunnissa etsitään kuntia
+    // maakunnissa etsitään kuntia (alueina) ja kuntakeskuksia (pisteinä)
+    if (C && C.mk && m === "maa") return T("municipalities");
+    if (C && C.mk && m === "pk") return T("centres");
     return (T("modeOv")[contKey] || {})[m] || T("modes")[m];
   }
   const diffName = k => lang === "en" ? DIFFS[k].nameEn : DIFFS[k].name;
@@ -744,17 +787,38 @@ if (typeof document !== "undefined") {
                           "pohjois_amerikka", "etela_amerikka", "oseania"];
   const timed = () => !learn || challenge;
   let mode = "pk", tasks = [], taskIx = 0, found = 0, timeLeft = 0;
+  let markers = [];            // kierroksen kaupunkimerkit, ks. drawDots
   let lastStickDown = 0, lastAttempt = 0, clockStr = "";
   let flightTarget = null;
   let pointerHeld = false;
   const keys = new Set();
   let toastTimer = 0, hintTimer = 0, countTimer = 0;
+  // Kierroksen omat ajastimet (löytöjuhlinnan jatko, nimilappujen häivytys).
+  // Kesken jäänyt kierros ei saa jatkua seuraavaan peliin: jos vanha
+  // nextTask laukeaisi uuden pelin alettua, se ohittaisi ensimmäisen
+  // kohteen ja käynnistäisi pelin kesken lähtölaskurin.
+  const timers = new Set();
+  function later(fn, ms) {
+    const id = setTimeout(() => { timers.delete(id); fn(); }, ms);
+    timers.add(id);
+    return id;
+  }
+  function clearPending() {
+    timers.forEach(clearTimeout);
+    timers.clear();
+    clearInterval(countTimer);
+    clearTimeout(toastTimer);
+    clearTimeout(hintTimer);
+    $("count").classList.add("hidden");
+    $("toast").classList.remove("show");
+    $("hint").setAttribute("opacity", 0);
+  }
 
   // transient: haasteen karttavaihto ei muuta valikon aluevalintaa
   function setContinent(key, transient) {
     contKey = key;
     C = CONTINENTS[key];
-    cities = CITY_DATA[key] || { pk: [], kau: [] };
+    cities = cityLists(CITY_DATA[key]);
     kmpx = kmPerPx(C);
     // km-arvot on viritetty Euroopalle; muilla mantereilla ne kerrotaan
     // kokokertoimella, jolloin pelituntuma on sama mantereen koosta riippumatta.
@@ -798,9 +862,13 @@ if (typeof document !== "undefined") {
     }
     $("dots").innerHTML = "";
     $("labels").innerHTML = "";
+    markers = [];
+    // molemmat minikartan kerrokset samaan koordinaatistoon, jotta kehys
+    // ja kopterin piste osuvat karttakerroksen päälle
     const mini = $("mini");
     mini.setAttribute("viewBox", `0 0 ${C.W} ${C.H}`);
     mini.style.aspectRatio = C.W + " / " + C.H;
+    $("miniov").setAttribute("viewBox", `0 0 ${C.W} ${C.H}`);
     const sea = $("minisea");
     sea.setAttribute("width", C.W); sea.setAttribute("height", C.H);
     heli.x = C.W / 2; heli.y = C.H / 2; heli.vx = heli.vy = 0;
@@ -837,15 +905,19 @@ if (typeof document !== "undefined") {
       list.push({ name: cityName(c, lang), x, y });   // sama nimi kuin tehtävissä
     };
     const m = challenge ? "seka" : mode;   // haasteen kohteet arvotaan sekoituspoolista
-    if (m === "pk" || m === "seka") cities.pk.forEach(add);
+    // maakunnissa kuntakeskukset näkyvät myös Kunnat-tilassa suunnistusapuna
+    if (m === "pk" || m === "seka" || (C.mk && m === "maa")) cities.pk.forEach(add);
     if (m === "kau" || m === "seka") cities.kau.forEach(add);
     if ((m === "opk" || m === "seka") && cities.opk) cities.opk.forEach(add);
     return list;
   }
 
   function drawDots() {
+    // merkkilista lasketaan kerran kierroksessa: sitä luetaan jokaisesta
+    // kosketuksen siirtymästä (setTarget), eikä se muutu kesken pelin
+    markers = markerPool();
     const r = (5 * K.U).toFixed(1), sw = (1.6 * K.U).toFixed(1);
-    $("dots").innerHTML = markerPool().map(p =>
+    $("dots").innerHTML = markers.map(p =>
       `<circle class="dot" data-name="${p.name}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r}" stroke-width="${sw}"/>`
     ).join("");
     $("labels").innerHTML = "";
@@ -864,7 +936,7 @@ if (typeof document !== "undefined") {
     const t = tasks[taskIx];
     const pre = { city: T("findCity"), country: T("findCountry"), feature: T("find") };
     if (contKey === "usa") pre.country = T("findState");
-    if (C.mk) pre.country = T("findKunta");
+    if (C.mk) { pre.country = T("findKunta"); pre.city = T("findCentre"); }
     $("task").innerHTML = t ? pre[t.kind] + "<b>" + t.name + "</b>" : T("worldMap");
     updateClock(true);
   }
@@ -894,6 +966,7 @@ if (typeof document !== "undefined") {
   }
 
   function startGame(m) {
+    clearPending();
     challenge = false;
     mode = m;
     tasks = makeTasks(mode, C, cities, null, lang);
@@ -910,6 +983,7 @@ if (typeof document !== "undefined") {
   }
 
   function startChallenge() {
+    clearPending();
     challenge = true;
     chOrder = shuffle(CONT_CHALLENGE, Math.random);
     chIx = 0; found = 0; timeLeft = CHALLENGE.start;
@@ -974,9 +1048,9 @@ if (typeof document !== "undefined") {
     // normaalipelissä nimi näkyy vain juhlinnan ajan, ettei se peitä muita merkkejä;
     // opettelussa nimet jäävät kartalle
     if (!learn) {
-      setTimeout(() => {
+      later(() => {
         el.style.opacity = 0;
-        setTimeout(() => el.remove(), 600);
+        later(() => el.remove(), 600);
       }, 1100);
     }
   }
@@ -1042,7 +1116,7 @@ if (typeof document !== "undefined") {
         beep(523, 0.12, 0); beep(784, 0.22, 0.12);
       }
       hud();
-      setTimeout(nextTask, 1200);
+      later(nextTask, 1200);
     } else {
       const penalty = challenge ? CHALLENGE.penalty : D().penalty;
       if (timed()) timeLeft -= penalty;
@@ -1111,7 +1185,7 @@ if (typeof document !== "undefined") {
     let ty = Math.max(10, Math.min(C.H - 10, p.y));
     // tartutaan lähimpään merkkiin, jos sellainen on aivan vieressä
     let best = K.SNAP, snap = null;
-    for (const m of markerPool()) {
+    for (const m of markers) {
       const d = Math.hypot(m.x - tx, m.y - ty);
       if (d < best) { best = d; snap = m; }
     }
@@ -1210,16 +1284,19 @@ if (typeof document !== "undefined") {
     $("mksel").textContent = mk ? contName(C, lang) : "";
     // paneeli auki maakuntaa valittaessa, kiinni tavallisen alueen valinnasta
     $("mkbtns").classList.toggle("hidden", !mk);
-    // pelimuotojen nimet alueen mukaan; maakunnissa vain Kunnat, muuten Maat
-    // piiloon jos kohdemaita on vain yksi ja osavaltioiden pääkaupungit
-    // näkyviin vain, jos alueella on opk-lista
+    // pelimuotojen nimet alueen mukaan; maakunnissa Kunnat ja Kuntakeskukset,
+    // muuten Maat piiloon jos kohdemaita on vain yksi ja osavaltioiden
+    // pääkaupungit näkyviin vain, jos alueella on opk-lista
     for (const m of MODE_KEYS) $("lbl-" + m).textContent = modeName(m);
-    const show = { pk: !mk, kau: !mk, opk: !mk && !!cities.opk,
-                   maa: C.countries.length >= 2, luonto: !mk, seka: !mk };
+    const hasCities = !!(cities.pk && cities.pk.length);
+    const show = { pk: hasCities, kau: !mk, opk: !mk && !!cities.opk,
+                   maa: C.countries.length >= 2, luonto: !mk,
+                   seka: !mk || hasCities };
     for (const m of Object.keys(show)) {
       const b = document.querySelector(`#start .modes button[data-mode="${m}"]`);
       b.style.display = show[m] ? "" : "none";
-      if (m === "maa") b.style.gridColumn = mk ? "1 / -1" : "";
+      // Kunnat-nappi vie koko rivin vain, jos se on alueen ainoa aluemuoto
+      if (m === "maa") b.style.gridColumn = mk && !hasCities ? "1 / -1" : "";
     }
     showBests();
   }
@@ -1236,11 +1313,13 @@ if (typeof document !== "undefined") {
     for (const [id, key] of [["title", "title"], ["choosearea", "chooseArea"],
         ["choosediff", "chooseDiff"], ["choosemode", "chooseMode"],
         ["lrn-t", "learnTitle"], ["lrn-d", "learnDesc"],
-        ["ch-t", "challengeTitle"], ["ch-d", "challengeDesc"],
+        ["ch-t", "challengeTitle"],
         ["again", "again"], ["tomenu", "toMenu"]])
       $(id).textContent = T(key);
     $("intro1").innerHTML = T("intro1");
-    $("intro2").innerHTML = T("intro2");
+    // säännöistä kertovat tekstit lukevat luvut sääntötauluista
+    $("intro2").innerHTML = T("intro2")(DIFFS);
+    $("ch-d").textContent = T("challengeDesc")(CHALLENGE);
     $("quitbtn").setAttribute("aria-label", T("quit"));
     buildMenus();
     setDiff(diff);
@@ -1267,8 +1346,7 @@ if (typeof document !== "undefined") {
   // Paluu päävalikkoon loppunäytöstä tai kesken pelin (✕): ei ennätystä,
   // ja mahdollinen lähtölaskuri perutaan
   function toMenu() {
-    clearInterval(countTimer);
-    $("count").classList.add("hidden");
+    clearPending();
     $("end").classList.add("hidden");
     $("start").classList.remove("hidden");
     state = "menu";
