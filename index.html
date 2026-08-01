@@ -879,13 +879,20 @@ if (typeof document !== "undefined") {
   // Mittakaavajana minikartan yläpuolelle: aina minikartan levyinen, lukema
   // kertoo montako kilometriä se leveys vastaa. Suhteutettu lentonäkymään
   // (pääkarttaan, jonka lyhyempi ruutusivu on K.VIEW yksikköä), ei minikarttaan.
+  let scaleTries = 0;
   function updateScale() {
     // huom: offsetWidth on undefined SVG-elementille — käytä clientWidthiä
     const w = $("mini").clientWidth;
     const side = Math.min(svg.clientWidth, svg.clientHeight);
     // asettelu voi olla vielä kesken heti latauksessa (esim. offline-tiedosto
-    // suoraan avattuna, jolloin resize-tapahtumaa ei tule): yritä uudelleen
-    if (!w || !side) { requestAnimationFrame(updateScale); return; }
+    // suoraan avattuna, jolloin resize-tapahtumaa ei tule): yritä uudelleen,
+    // mutta rajallisesti — muuten nollalevyinen minikartta jättäisi rAF-ketjun
+    // pyörimään ikuisesti (ja jokainen resize käynnistäisi oman ketjunsa)
+    if (!w || !side) {
+      if (++scaleTries < 60) requestAnimationFrame(updateScale);
+      return;
+    }
+    scaleTries = 0;
     const kmCss = K.VIEW * kmpx / side;   // km / css-px lentonäkymässä
     const km = w * kmCss;                  // minikartan leveyttä vastaava matka
     const mag = Math.pow(10, Math.floor(Math.log10(km)) - 1);   // 2 merkitsevää
@@ -980,6 +987,7 @@ if (typeof document !== "undefined") {
     // lähtölaskuri kaikissa pisteitä laskevissa peleissä; opettelussa suoraan matkaan
     if (timed()) startCountdown();
     else beginTask();
+    startLoop();
   }
 
   function startChallenge() {
@@ -990,6 +998,7 @@ if (typeof document !== "undefined") {
     $("start").classList.add("hidden");
     $("end").classList.add("hidden");
     beginContinent();
+    startLoop();
   }
 
   function beginContinent() {
@@ -1362,8 +1371,17 @@ if (typeof document !== "undefined") {
   $("tomenu").addEventListener("click", toMenu);
   $("quitbtn").addEventListener("click", toMenu);
 
-  // Pelisilmukka
+  // Pelisilmukka. Pyörii vain kun kartta on näkyvissä: aloitus- ja
+  // loppuruutu (.overlay) peittävät ruudun kokonaan, joten viewBoxin ja
+  // muunnosten kirjoittaminen niiden takana olisi pelkkää akun kulutusta.
   let prev = performance.now();
+  let loopOn = false;
+  function startLoop() {
+    if (loopOn) return;
+    loopOn = true;
+    prev = performance.now();
+    requestAnimationFrame(frame);
+  }
   function frame(now) {
     const dt = Math.min(0.05, (now - prev) / 1000);
     prev = now;
@@ -1439,11 +1457,12 @@ if (typeof document !== "undefined") {
       `translate(${heli.x.toFixed(1)} ${heli.y.toFixed(1)}) scale(${(0.6 * K.U).toFixed(3)})`);
     bodyEl.setAttribute("transform", `rotate(${heli.heading.toFixed(1)})`);
     rotorEl.setAttribute("transform", `rotate(${heli.rotor.toFixed(0)})`);
+    if (state === "menu" || state === "end") { loopOn = false; return; }
     requestAnimationFrame(frame);
   }
 
   applyLang();   // asettaa tekstit, rakentaa valikot ja valitsee tallennetun alueen
-  requestAnimationFrame(frame);
+  startLoop();   // yksi frame asettaa näkymän valmiiksi, sitten silmukka pysähtyy
   $("jswarn").style.display = "none";   // koodi käynnistyi asti tänne
 
   // Webapp: service worker antaa offline-tuen, kun sivu on avattu

@@ -742,6 +742,53 @@ def path_d(rings, close=True, dec=1):
     return "".join(parts)
 
 
+def js_string(s):
+    """JSON-teksti yksinkertaisiin lainausmerkkeihin JS-lähdekoodia varten.
+
+    json.dumps ei tuota rivinvaihtoja eikä muita ohjausmerkkejä sellaisenaan,
+    joten kenoviivat, heittomerkit ja JS:n rivinvaihdoiksi tulkitsemat
+    U+2028/U+2029 riittää suojata.
+    """
+    return (s.replace("\\", "\\\\").replace("'", "\\'")
+             .replace("\u2028", "\\u2028").replace("\u2029", "\\u2029"))
+
+
+def world_js(world):
+    """Aluetaulukko JS-lähdekoodiksi, alueet laiskasti jäsennettävinä.
+
+    Jokaisen alueen data on JSON-merkkijonona, ja se jäsennetään vasta kun
+    aluetta kosketaan (Proxy). Käynnistyksessä syntyy vain valikon tarvitsema
+    nimitaulu, joten koko megatavun jäsentäminen jää tekemättä: Chromiumissa
+    mitattuna datatiedoston lataus + suoritus ~80 ms → ~50 ms. Peli pysyy
+    yhtenä tiedostona, eli offline-käyttö ei muutu.
+    """
+    raw = ",".join(
+        "%s:'%s'" % (json.dumps(k), js_string(
+            json.dumps(v, ensure_ascii=False, separators=(",", ":"))))
+        for k, v in world.items())
+    # valikko lukee vain nimet ja mk-lipun — ne pidetään heti saatavilla
+    idx = {k: {"name": v["name"], "nameEn": v["nameEn"], "mk": v.get("mk", 0)}
+           for k, v in world.items()}
+    return ("const CONTINENTS=(()=>{\n"
+            "const RAW={" + raw + "};\n"
+            "const IDX=" + json.dumps(idx, ensure_ascii=False,
+                                      separators=(",", ":")) + ";\n"
+            "const out={};\n"
+            "for (const k of Object.keys(RAW)) {\n"
+            "  let loaded = false;\n"
+            "  // nimet vastataan taulusta; ensimmäinen muu kenttä purkaa datan\n"
+            "  out[k] = new Proxy(IDX[k], { get(t, p) {\n"
+            "    if (!loaded && !(p in t)) {\n"
+            "      loaded = true;\n"
+            "      Object.assign(t, JSON.parse(RAW[k]));\n"
+            "    }\n"
+            "    return t[p];\n"
+            "  } });\n"
+            "}\n"
+            "return out;\n"
+            "})();\n")
+
+
 def flat(rings, dec=1):
     return [[round(v, dec) if dec else round(v) for pt in r for v in pt]
             for r in rings]
@@ -1163,9 +1210,7 @@ def main():
               f"tiedataa {(len(roads_v) + len(roads_k)) // 1024} kt")
 
     out = ("// Generoitu build_world.py:llä Natural Earth -aineistoista\n"
-           "const CONTINENTS="
-           + json.dumps(world, ensure_ascii=False, separators=(",", ":"))
-           + ";\n")
+           + world_js(world))
     with open(dst, "w") as f:
         f.write(out)
     print(f"{dst}: {len(out) // 1024} KB")

@@ -211,6 +211,23 @@ const check = (cond, msg) => (cond ? ok : fail).push(msg);
   check(await page.evaluate(n => !!document.querySelector(`.dot.found[data-name="${n}"]`), kunta),
     "löydetty kuntakeskus merkittiin vihreäksi");
 
+  // --- pelisilmukka pyörii vain kartan päällä (akku)
+  const rafCount = async () => page.evaluate(() => new Promise(res => {
+    let n = 0;
+    const orig = window.requestAnimationFrame;
+    window.requestAnimationFrame = cb => { n++; return orig.call(window, cb); };
+    setTimeout(() => { window.requestAnimationFrame = orig; res(n); }, 500);
+  }));
+  const rafPlay = await rafCount();
+  check(rafPlay > 5, "silmukka pyörii pelin aikana: " + rafPlay + " framea / 0,5 s");
+  await page.click("#quitbtn");
+  const rafMenu = await rafCount();
+  check(rafMenu === 0, "silmukka pysähtyy valikossa: " + rafMenu + " framea / 0,5 s");
+  await page.click('button[data-mode="pk"]');
+  await page.waitForFunction(() => document.querySelector("#task").textContent.includes("Etsi"));
+  const rafAgain = await rafCount();
+  check(rafAgain > 5, "silmukka käynnistyy uudestaan: " + rafAgain + " framea / 0,5 s");
+
   check(errors.length === 0, "ei JS-virheitä: " + errors.join(" | "));
   await browser.close();
   console.log(ok.map(s => "  OK   " + s).join("\n"));

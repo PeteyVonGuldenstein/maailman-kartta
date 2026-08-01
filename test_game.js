@@ -37,6 +37,16 @@ function inFeature(C, name, lon, lat) {
   return f.k === "j" ? nearLines(x, y, f.l, t.line) : pointInArea(x, y, f, t.coast, t.ctr);
 }
 
+// Laiska jäsennys: alueen data puretaan vasta kun sitä käytetään, ja
+// valikon tarvitsemat nimet saa ilman purkua (nimi + nameEn + mk = 3 kenttää)
+const parsedAtStart = Object.keys(CONTINENTS).filter(k => Object.keys(CONTINENTS[k]).length > 3);
+assert.strictEqual(parsedAtStart.length, 0, "alueet jäsentämättä ennen käyttöä: " + parsedAtStart);
+assert.strictEqual(CONTINENTS.mk_lappi.name, "Lappi", "nimi ilman jäsennystä");
+assert.strictEqual(Object.keys(CONTINENTS.mk_lappi).length, 3, "nimen luku ei purkanut aluetta");
+assert(CONTINENTS.mk_lappi.countries.length > 0, "data purkautuu tarvittaessa");
+assert(Object.keys(CONTINENTS.mk_lappi).length > 3, "purettu alue jää muistiin");
+assert.strictEqual(CONTINENTS.eurooppa.roadsV, undefined, "puuttuva kenttä on undefined purun jälkeenkin");
+
 // Rakenne ja tehtävägeneraattori joka maanosalle ja muodolle
 for (const key of KEYS) {
   const C = CONTINENTS[key];

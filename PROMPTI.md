@@ -48,6 +48,11 @@ ainoana pelimuotona etsitään maakunnan kuntia ("Etsi kunta: Iitti").
 - Yksi HTML-sivu + generoitu `world_data.js` (kehitys); jakeluversiossa
   data upotetaan HTML-tiedostoon (`make_offline.py` → ~650 KB, toimii
   offline). HTML + CSS + vanilla JS + inline-SVG, ei riippuvuuksia.
+- `world_data.js` pitää jokaisen alueen datan JSON-merkkijonona ja jäsentää
+  sen vasta kun aluetta kosketaan (Proxy + nimitaulu valikkoa varten), joten
+  käynnistys ei maksa koko aineiston jäsentämistä.
+- Pelisilmukka pyörii vain kartan ollessa näkyvissä; aloitus- ja loppuruudussa
+  se pysähtyy (akku).
 - Puhtaat funktiot (projektio, point-in-polygon, viivaetäisyys,
   tehtävägeneraattori, pisteytys) skriptin alussa, UI-koodi
   `if (typeof document !== "undefined")` -lohkossa → testattavissa Nodella.
@@ -163,5 +168,8 @@ parametri); ennätysavaimet eivät riipu kielestä. Kielen vaihto rakentaa
 valikot uudelleen (`applyLang`).
 
 ### Jakelu
-Pythonin `ThreadingHTTPServer` (portti 8095, `Cache-Control: no-store`) +
+Pythonin `ThreadingHTTPServer` (portti 8095, gzip + `Cache-Control: no-cache`,
+eli selain käyttää välimuistia mutta tarkistaa aina onko tiedosto muuttunut) +
 `@reboot`-cron; offline-tiedosto `maailman-kartta.html` jaettavaksi.
+Service worker vastaa välimuistista ja päivittää taustalla, joten avaus ei
+odota verkkoa (uusi versio näkyy seuraavalla avauksella).
