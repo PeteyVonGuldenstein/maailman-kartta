@@ -228,6 +228,40 @@ const check = (cond, msg) => (cond ? ok : fail).push(msg);
   const rafAgain = await rafCount();
   check(rafAgain > 5, "silmukka käynnistyy uudestaan: " + rafAgain + " framea / 0,5 s");
 
+  // --- näppäimet: fokuksen menetys vapauttaa pohjassa olevan nuolen
+  const heliPos = () => page.evaluate(() => document.getElementById("heli")
+    .getAttribute("transform").match(/translate\(([-\d.]+) ([-\d.]+)\)/).slice(1).map(Number));
+  const p0 = await heliPos();
+  await page.keyboard.down("ArrowLeft");
+  await page.waitForTimeout(300);
+  await page.evaluate(() => window.dispatchEvent(new Event("blur")));   // keyup jää tulematta
+  await page.waitForTimeout(600);   // jarrutus ehtii pysäyttää kopterin
+  const p1 = await heliPos();
+  await page.waitForTimeout(400);
+  const p2 = await heliPos();
+  await page.keyboard.up("ArrowLeft");
+  check(Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) > 5, `nuoli liikutti kopteria: ${p0} → ${p1}`);
+  check(Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) < 0.5,
+    `kopteri pysähtyi fokuksen kadottua: ${p1} → ${p2}`);
+
+  // --- valikko ei syö nuolia, eikä valikossa painettu nuoli liikuta uutta peliä
+  await page.click("#quitbtn");
+  const prevented = await page.evaluate(() => {
+    const e = new KeyboardEvent("keydown", { key: "ArrowDown", cancelable: true });
+    window.dispatchEvent(e);
+    return e.defaultPrevented;
+  });
+  check(!prevented, "valikko ei estä nuolinäppäimiä (vieritys toimii)");
+  await page.keyboard.down("ArrowRight");   // pohjassa jo valikossa
+  await page.click('button[data-mode="pk"]');
+  await page.waitForSelector("#count", { state: "hidden", timeout: 8000 });
+  const q1 = await heliPos();
+  await page.waitForTimeout(400);
+  const q2 = await heliPos();
+  await page.keyboard.up("ArrowRight");
+  check(Math.hypot(q2[0] - q1[0], q2[1] - q1[1]) < 0.5,
+    `valikossa painettu nuoli ei liikuttanut kopteria: ${q1} → ${q2}`);
+
   check(errors.length === 0, "ei JS-virheitä: " + errors.join(" | "));
   await browser.close();
   console.log(ok.map(s => "  OK   " + s).join("\n"));

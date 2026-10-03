@@ -760,6 +760,9 @@ if (typeof document !== "undefined") {
   function beep(freq, dur, delay, type) {
     try {
       actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      // iOS ja Android pysäyttävät äänen, kun sovellus käy taustalla;
+      // ilman jatkoa äänet katoaisivat loppuistunnon ajaksi
+      if (actx.state !== "running") actx.resume();
       const t = actx.currentTime + (delay || 0);
       const o = actx.createOscillator(), g = actx.createGain();
       o.type = type || "triangle"; o.frequency.value = freq;
@@ -793,6 +796,7 @@ if (typeof document !== "undefined") {
   let pointerHeld = false;
   const keys = new Set();
   let toastTimer = 0, hintTimer = 0, countTimer = 0;
+  let updateReady = false;     // uusi versio asennettu, ladataan valikossa
   // Kierroksen omat ajastimet (löytöjuhlinnan jatko, nimilappujen häivytys).
   // Kesken jäänyt kierros ei saa jatkua seuraavaan peliin: jos vanha
   // nextTask laukeaisi uuden pelin alettua, se ohittaisi ensimmäisen
@@ -807,6 +811,7 @@ if (typeof document !== "undefined") {
     timers.forEach(clearTimeout);
     timers.clear();
     clearInterval(countTimer);
+    keys.clear();   // valikossa painettu nuoli ei saa liikuttaa uutta peliä
     clearTimeout(toastTimer);
     clearTimeout(hintTimer);
     $("count").classList.add("hidden");
@@ -1054,9 +1059,10 @@ if (typeof document !== "undefined") {
     el.style.strokeWidth = (3 * K.U).toFixed(1) + "px";
     el.textContent = name;
     $("labels").appendChild(el);
-    // normaalipelissä nimi näkyy vain juhlinnan ajan, ettei se peitä muita merkkejä;
-    // opettelussa nimet jäävät kartalle
-    if (!learn) {
+    // ajastetussa pelissä nimi näkyy vain juhlinnan ajan, ettei se peitä muita
+    // merkkejä eikä paljasta vastauksia; opettelussa nimet jäävät kartalle
+    // (haaste on aina ajastettu, vaikka opettelu olisi valittuna)
+    if (timed()) {
       later(() => {
         el.style.opacity = 0;
         later(() => el.remove(), 600);
@@ -1208,6 +1214,8 @@ if (typeof document !== "undefined") {
 
   // Ohjaus: näppäimistö
   addEventListener("keydown", e => {
+    // aloitus- ja loppuruutu vierivät nuolilla pienellä näytöllä
+    if (state === "menu" || state === "end") return;
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
       e.preventDefault();
       keys.add(e.key);
@@ -1218,6 +1226,10 @@ if (typeof document !== "undefined") {
     }
   });
   addEventListener("keyup", e => keys.delete(e.key));
+  // keyup jää tulematta, jos fokus vaihtuu nuolen ollessa pohjassa
+  // (Alt+Tab, ilmoitus) — muuten kopteri lentäisi itsekseen
+  addEventListener("blur", () => keys.clear());
+  document.addEventListener("visibilitychange", () => keys.clear());
 
   // Laskeutuminen: tuplanapautus tattiin (tai välilyönti/Enter)
   function tryLand() {
@@ -1367,6 +1379,7 @@ if (typeof document !== "undefined") {
     }
     hud();
     showBests();
+    if (updateReady) location.reload();
   }
   $("tomenu").addEventListener("click", toMenu);
   $("quitbtn").addEventListener("click", toMenu);
@@ -1468,7 +1481,16 @@ if (typeof document !== "undefined") {
   // Webapp: service worker antaa offline-tuen, kun sivu on avattu
   // suojatusta yhteydestä (https tai localhost); muuten rekisteröinti
   // epäonnistuu hiljaa eikä haittaa pelaamista.
+  // Uusi versio otetaan käyttöön heti, kun pelaaja on valikossa — kesken
+  // pelin vasta Valikkoon-paluussa. Ensiasennus vaihtaa myös hallitsijan,
+  // mutta silloin sivu on jo uusin, eikä uudelleenlatausta tarvita.
   if ("serviceWorker" in navigator && location.protocol !== "file:") {
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!hadController || updateReady) return;
+      updateReady = true;
+      if (state === "menu") location.reload();
+    });
     navigator.serviceWorker.register("sw.js").catch(() => {});
   }
 }
